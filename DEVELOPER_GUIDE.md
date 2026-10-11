@@ -8,7 +8,7 @@ Quick-start guide for working on **ระบบจัดตารางเวร
 
 | Tool | Minimum Version | Install |
 |------|-----------------|---------|
-| Node.js | 20 | [nodejs.org](https://nodejs.org) or `nvm install 20` |
+| Node.js | 22 | [nodejs.org](https://nodejs.org) or `nvm install 22` |
 | npm | 10 | bundled with Node |
 | Git | any | [git-scm.com](https://git-scm.com) |
 

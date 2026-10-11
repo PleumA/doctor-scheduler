@@ -18,7 +18,7 @@ For a detailed walkthrough of the Monte Carlo simulation logic and constraints, 
 ## 🚀 How to Run Locally & Run Tests
 
 ### Prerequisites
-- **Node.js ≥ 20** and **npm ≥ 10**. Install via [nvm](https://github.com/nvm-sh/nvm) or from [nodejs.org](https://nodejs.org).
+- **Node.js ≥ 22** (the version CI uses) and **npm ≥ 10**. Install via [nvm](https://github.com/nvm-sh/nvm) or from [nodejs.org](https://nodejs.org).
 
 ### Setup
 ```bash
