@@ -452,6 +452,7 @@ async function runTest(name, testFn) {
 
         // Mock copy to clipboard function
         let capturedTSV = null;
+        global.navigator = global.navigator || {}; // Node < 21 has no global navigator
         global.navigator.clipboard = {
             writeText: async (text) => {
                 capturedTSV = text;
