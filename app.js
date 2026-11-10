@@ -1143,6 +1143,20 @@ window.setViewMode = function (mode) {
 
 const isoLocal = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const canonicalDayKey = (d) => isoLocal(d);
+// ponytail: a bare day number in a cross-month range resolves to its first occurrence
+function normalizeSlotKey(raw, config) {
+    const s = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    if (/^\d{1,2}$/.test(s)) {
+        const dates = (config && config.dates) || scheduleDates;
+        const hit = dates.find((x) => x.getDate() === parseInt(s, 10));
+        return hit ? canonicalDayKey(hit) : null;
+    }
+    return null;
+}
 const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
 
 // The last duties of the committed result, so the next contiguous period can honour rest and night->morning
@@ -1467,7 +1481,8 @@ function parseUIConfig() {
         const dateStr = String(req.date).trim();
         const s = req.slots;
         if (isCustomDateRange) {
-            if (dateStr && s) extraSlotsMap[dateStr] = s;
+            const k = normalizeSlotKey(dateStr, null);
+            if (k && s) extraSlotsMap[k] = s;
         } else {
             if (dateStr.includes('-')) {
                 const parts = dateStr.split('-');
@@ -1576,10 +1591,7 @@ function parseUIConfig() {
         let key = day;
         if (isCustomDateRange) {
             const dateObj = scheduleDates[day - 1];
-            const dd = String(dateObj.getDate()).padStart(2, '0');
-            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const yyyy = dateObj.getFullYear();
-            key = `${dd}/${mm}/${yyyy}`;
+            key = canonicalDayKey(dateObj);
         }
 
         if (isShiftBased) {
