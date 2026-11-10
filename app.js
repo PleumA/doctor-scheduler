@@ -1141,6 +1141,27 @@ window.setViewMode = function (mode) {
 // The old proxy sniffed arguments.callee.caller / Error.stack to guess which day
 // was being compared; the solver now asks the Set explicitly (specialRuleDays.has(day)).
 
+const isoLocal = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+
+// The last duties of the committed result, so the next contiguous period can honour rest and night->morning
+function buildCarryOver(result) {
+    const { schedule, dates, config: c, doctors: docs } = result;
+    const keep = Math.max(c.offDutyPeriod, 2);
+    const dutiesByDoctor = {};
+    docs.forEach((d) => (dutiesByDoctor[d] = []));
+    for (let i = Math.max(0, schedule.length - keep); i < schedule.length; i++) {
+        schedule[i].selectedDocs.forEach((s, idx) => {
+            const name = s && s.name;
+            if (!dutiesByDoctor[name]) return;
+            const night = c.isShiftBased && idx >= c.morningSlots + c.afternoonSlots;
+            dutiesByDoctor[name].push({ date: isoLocal(dates[i]), type: night ? 'night' : 'duty' });
+        });
+    }
+    return { dutiesByDoctor };
+}
+
 function parseUIConfig() {
     const year = parseInt(document.getElementById('inputYear').value);
     const month = parseInt(document.getElementById('inputMonth').value);
@@ -1662,7 +1683,21 @@ function parseUIConfig() {
         }
     }
 
+    // Carry over only from the day right before this period, for the same doctors
+    const prev = globalResult;
+    const periodStart = scheduleDates[0] ? isoLocal(scheduleDates[0]) : null;
+    const carryOver =
+        prev &&
+        prev.carryOver &&
+        periodStart &&
+        dayDiff(isoLocal(prev.dates[prev.dates.length - 1]), periodStart) === 1 &&
+        [...prev.doctors].sort().join('\u0000') === [...doctors].sort().join('\u0000')
+            ? prev.carryOver
+            : null;
+
     const configObj = {
+        carryOver,
+        periodStart,
         year,
         month,
         numDays,
@@ -2096,6 +2131,8 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         morningSlots,
         afternoonSlots,
         nightSlots,
+        carryOver,
+        periodStart,
     } = config;
 
     const rng = config && typeof config.rng === 'function' ? config.rng : Math.random;
@@ -2308,6 +2345,14 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     return false;
                 for (let lookBack = 1; lookBack < offDutyPeriod; lookBack++) {
                     if ((scheduleMap[day - lookBack] || []).includes(doc)) return false;
+                }
+                if (day === 1 && carryOver) {
+                    for (const duty of carryOver.dutiesByDoctor[doc] || []) {
+                        const ago = dayDiff(duty.date, periodStart);
+                        if (ago < offDutyPeriod) return false;
+                        if (ago === 1 && duty.type === 'night' && isShiftBased && slotIdx < morningSlots)
+                            return false;
+                    }
                 }
                 if (
                     isHoliday &&
@@ -3057,6 +3102,7 @@ async function runScheduleOnce() {
 
         // Apply manual overrides saved previously
         applyManualOverrides(config);
+        globalResult.carryOver = buildCarryOver(globalResult);
 
         renderResults();
         updateStatsDashboard();
