@@ -5,10 +5,23 @@ All notable changes to the Automatic On-Call & Night Shift Doctor Scheduler will
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+* **Night floor:** every doctor can be required to have at least N shifts (default 14; 0 disables). A toggleable "extra doctor on a night" plan adds one extra doctor only when needed to reach the floor, spread across the month and allocated by role need; the plan is shown above the results.
+* **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available") instead of relaxing the rest rule.
+* **Deterministic solver:** the search is seeded from the inputs, so identical inputs produce an identical roster.
+* **Playwright end-to-end suite** (`tests/playwrightE2e.test.js`) driving the system Chrome; it runs last in `npm test`.
+* Logic design document at `docs/superpowers/specs/2026-11-10-scheduler-logic-design.md`.
+
 ### Changed
-* CI runs on Node.js 22 (Node 20 reached end of life in April 2026); the developer docs now require Node 22.
+* **Off Duty Period is 0-based in the UI:** 0 = no gap, 1 = one day off after a night. Exported configs carry `configVersion: 2`; older configs are migrated automatically.
+* **Shift-mode feasibility** now assumes one shift per doctor per day and excludes no-duty days, instead of multiplying by the shift count.
+* Manual edits that would drop a doctor below the night floor are rejected with a toast.
+* Days without a planned extra doctor no longer show a phantom "Open" third duty cell.
 
 ### Fixed
+* `editingState` no longer depends on an 80 ms timer to catch a mid-solve change.
+* `lastFixes` and `serviceWorker` assertions updated to the new palette and dynamic cache version.
+* CI runs on Node.js 22 (Node 20 reached end of life in April 2026); the developer docs now require Node 22.
 * `shiftBased` test 7 no longer assumes a global `navigator`, which Node 20 lacks.
 
 ## [1.11.0] - 2026-10-11
