@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available") instead of relaxing the rest rule.
 * **Deterministic solver:** the search is seeded from the inputs, so identical inputs produce an identical roster.
 * **Playwright end-to-end suite** (`tests/playwrightE2e.test.js`) driving the system Chrome; it runs last in `npm test`.
+* **Relaxation telemetry:** every rule the cascade gives up is recorded on `globalResult.relaxations` (`day`, `slot`, `level`, `kind`, `doctors`), scored (conflict 50 000, day-before-off 5 000, spacing/special 1 000) and listed in a per-day warnings panel; the success toast reports the warning count in Thai and English.
+* **Cross-period carry-over:** the next contiguous period inherits each doctor's last `max(offDutyPeriod, 2)` duties and enforces rest, night→morning and holiday spacing on day 1; it is rebuilt from the live schedule (including manual edits) and ignored when the period is non-contiguous or the doctor set changed.
 * Logic design document at `docs/superpowers/specs/2026-11-10-scheduler-logic-design.md`.
 
 ### Changed
@@ -17,8 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Shift-mode feasibility** now assumes one shift per doctor per day and excludes no-duty days, instead of multiplying by the shift count.
 * Manual edits that would drop a doctor below the night floor are rejected with a toast.
 * Days without a planned extra doctor no longer show a phantom "Open" third duty cell.
+* The quota-density sort comparator reads a per-candidate suffix array of remaining availability in O(1) instead of rescanning forward per comparison; chosen rosters are unchanged.
 
 ### Fixed
+* **Custom-range per-day slot overrides** now match by a canonical `YYYY-MM-DD` key (also accepting `DD/MM/YYYY` or a bare day number); numeric keys no longer silently miss the lookup.
+* **Manual overrides are validated before the schedule mutates:** duplicate, conflict, role, off request, rest, holiday, night→morning, quota and floor failures are rejected with a toast naming the rule. Drag/drop validates the final state of the whole swap atomically, so an illegal move changes nothing and leaves no undo entry.
+* **Invalid input is rejected or clamped:** impossible dates (31/02, 31/04, 00/01) are refused while leap days remain valid, start > end shows a toast, and negative/NaN slot counts no longer throw `RangeError`.
 * `editingState` no longer depends on an 80 ms timer to catch a mid-solve change.
 * `lastFixes` and `serviceWorker` assertions updated to the new palette and dynamic cache version.
 * CI runs on Node.js 22 (Node 20 reached end of life in April 2026); the developer docs now require Node 22.

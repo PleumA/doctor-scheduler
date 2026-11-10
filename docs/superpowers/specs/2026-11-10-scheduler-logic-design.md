@@ -1,7 +1,7 @@
 # Scheduler Logic Redesign — Night Floor, Extra Coverage, and Fairness
 
 Date: 2026-11-10
-Status: implemented (v1, 2026-11-10)
+Status: implemented (v1 + remaining-logic close-out, 2026-11-10)
 Scope: scheduler logic only. The duty-sheet visual redesign is separate and already implemented.
 
 ## 1. Intent and why
@@ -241,3 +241,49 @@ Resolved: **night/default first.** Build the generic night core for the default 
 - Tests added: `tests/nightFloor.test.js` (12 checks) and a floor assertion in `tests/playwrightE2e.test.js`.
 - Manual overrides that would drop a doctor below the floor are rejected with a toast (standard, role-based and shift-night).
 - v1 keeps the existing greedy + 300-candidate search, adding a floor-first sort, a floor score term, a seeded RNG and a final floor audit. The dedicated construct-then-repair pass and the full relaxation scoring remain future work.
+
+## 15. Implementation notes (v2 — remaining logic close-out)
+
+Plan: `docs/superpowers/plans/2026-11-10-scheduler-logic-remaining.md` (Tasks 1–6, all committed on `solver-logic`). No new dependencies; the app stays offline-first.
+
+### 15.1 Relaxation telemetry, scoring and warnings
+
+- `generateSingleScheduleCandidate` returns `relaxations` alongside the schedule and counts. After a doctor is placed, the solver records their **actual** violations, one record per violated kind at the same day/slot: `{ day, slot, level: 2|3|4|5, kind: 'spacing'|'conflict'|'dayBeforeOff'|'special', doctors: string[] }`. A multi-violation pick (for example a level-4 pick that also conflicts) records every kind, not one.
+- `scoreSchedule` subtracts `RELAX_PENALTY` per record: conflict 50 000, dayBeforeOff 5 000, spacing 1 000, special 1 000. This sits after the floor term, so a violating roster no longer scores like a clean one.
+- `globalResult.relaxations` is a deep copy of the chosen candidate's array. `renderRelaxations()` fills `#relaxationPanel` (hidden when empty) from the day, kind and doctors; it is called by `renderResults` and by the language toggle. The success toast appends the warning count (`(N warnings)` / `(คำเตือน N รายการ)`).
+- The panel reflects solver output. Accepted manual edits cannot introduce a relaxation by definition (the override validator enforces the hard rules), so it is not recomputed after edits.
+
+### 15.2 Cross-period carry-over
+
+- `buildCarryOver(result)` keeps each doctor's last `max(offDutyPeriod, 2)` duty records: `{ dutiesByDoctor: { [doctor]: [{ date: 'YYYY-MM-DD', type: 'night'|'duty', holiday: boolean }] } }`, stored as `globalResult.carryOver`. `type` is `night` only for night slots in shift mode.
+- `parseUIConfig` sets `config.carryOver` when the new period starts exactly one day after the displayed result's last date **and** the doctor set is identical. Regenerating the same period reuses its own carry-in; a non-contiguous period or a changed doctor set yields `null`.
+- The carry-over is built from the live displayed result, so manual edits made after generation are included. Day 1 of the new period uses it in `strictOk` for rest, night→morning (via `isBlockedByNightToMorning`, so every cascade level honours it) and holiday spacing.
+
+### 15.3 Canonical custom-range slot keys
+
+- `canonicalDayKey(dateObj)` (an alias of `isoLocal`) produces `YYYY-MM-DD`.
+- `normalizeSlotKey(raw, config)` accepts `YYYY-MM-DD`, `DD/MM/YYYY`, or a bare day number resolved against the range; unresolvable entries are dropped.
+- In custom-range mode, `extraSlotsMap` is keyed only by the canonical key and `getRoleSlotsForDay` reads it with `canonicalDayKey(scheduleDates[day-1])`. The standard-month numeric path is unchanged. A bare day number in a cross-month range resolves to its first occurrence (documented in code).
+
+### 15.4 Manual override validator
+
+- `validateEdits(config, edits)` simulates all edits together against the displayed schedule and returns `{ ok, reason, detail }` for the first failing rule, in this order: `duplicate`, `conflict`, `role`, `off`, `rest`, `holiday`, `nightToMorning`, `quota`, `floor`. `validateManualAssignment(config, day, slotIndex, newDoctor)` is the single-edit wrapper.
+- Rest and night→morning are checked in both directions (a move can break a later duty), including carried duties before the period. Off requests also check the next day for the night slot (or non-shift mode). Holiday spacing covers adjacent holiday days and a carried holiday before day 1. The floor rule flags only doctors who lose duties and end below the floor.
+- `updateDoctorAssignment` validates before pushing undo or mutating the schedule and rejects with a toast naming the rule and detail.
+- Drag/drop (table, calendar and mobile sheet) goes through `window.applyPairedEdits(edits)`: the **final** state of the whole move is validated once, then the edits are applied under `isDragAndDropOperation` so the transient intermediate state (for example a same-day duplicate during a swap) is not re-checked. An illegal swap changes nothing and adds no undo entry.
+
+### 15.5 Input and date guards
+
+- `expandSlots` returns `[]` for non-finite, zero or negative counts (floors fractional counts), so `Array(-1)` can no longer throw `RangeError`.
+- `parseUIConfig` clamps default slots to 1..10 (NaN/empty → 2), shift slots to 0..10 and the night floor to 0..60.
+- `parseDateDDMMYYYY` round-trips the local components, so impossible dates (31/02, 31/04, 00/01) return `null` while valid leap days (29/02/2028) stay valid; start > end is rejected with a toast and no schedule.
+
+### 15.6 Sort-comparator availability cost
+
+- When quotas are active, `generateSingleScheduleCandidate` builds `remainingAvailableByDoctor` once per candidate: a suffix array where `suffix[d]` is the number of days from `d` through the end of the range on which the doctor has no off request (O(days × doctors)).
+- The quota-density comparator reads `remainingAvailableByDoctor[doc][currentDay]` in O(1), replacing the per-comparison forward scan. The chosen rosters are unchanged (verified byte-identical for three configurations with the same seed), and the deterministic tie-break is preserved.
+
+### 15.7 Tests added in this close-out
+
+`tests/relaxationReport.test.js`, `tests/carryOver.test.js`, `tests/customRangeSlots.test.js`, `tests/overrideValidation.test.js`, `tests/inputValidation.test.js`, `tests/solverPerformance.test.js`.
+
