@@ -1710,8 +1710,13 @@ function parseUIConfig() {
     const prev = globalResult;
     const periodStart = scheduleDates[0] ? isoLocal(scheduleDates[0]) : null;
     let carryOver = null;
+    // A partial result (no config/dates/doctors) has nothing to carry; never let it throw here.
     if (
         prev &&
+        prev.config &&
+        Array.isArray(prev.doctors) &&
+        Array.isArray(prev.dates) &&
+        prev.dates.length > 0 &&
         periodStart &&
         [...prev.doctors].sort().join('\u0000') === [...doctors].sort().join('\u0000')
     ) {

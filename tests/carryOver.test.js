@@ -102,5 +102,19 @@ const { loadApp, reset, settle, setInput, snap } = require('./domHarness');
         assert.notStrictEqual(rows()[0].selectedDocs[0].name, night);
     });
 
+    await test('a partial result without config does not throw and carries nothing', async () => {
+        w.eval(`
+            globalResult = {
+                schedule: [{ day: 1, selectedDocs: [{ name: 'A', role: 'Default' }] }],
+                doctors: doctors.slice(),
+                dates: [new Date(2026, 0, 31)],
+            };
+        `);
+        const co = w.eval('parseUIConfig().carryOver');
+        assert.strictEqual(co, null);
+        w.eval('globalResult = { schedule: [], doctors: doctors.slice() };');
+        assert.strictEqual(w.eval('parseUIConfig().carryOver'), null);
+    });
+
     process.exit(failed ? 1 : 0);
 })();
