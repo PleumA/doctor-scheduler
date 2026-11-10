@@ -58,28 +58,31 @@ function assertValidSchedule(result) {
     // The availability density branch only runs under quotas; this is the case the
     // precomputation actually speeds up. Timing is checked against the no-quota baseline
     // instead of an absolute wall-clock budget, so the guard does not depend on machine speed.
-    await r.test('90 days, 10 doctors, 3 slots, even quotas stays near the baseline cost', async () => {
-        const quota = DOCS.map((d) => `${d}:27`).join(', '); // 270 slots / 10 doctors
-        const { elapsed, result } = await generate90Days(w, quota);
-        assertValidSchedule(result);
-        // JSON round trip: summary comes from the jsdom realm, whose Array prototype differs here
-        assert.strictEqual(
-            JSON.stringify(result.summary.map((s) => s.total)),
-            JSON.stringify(DOCS.map(() => 27)),
-            'hard quota must be met exactly'
-        );
-        console.log(
-            `    no-quota run: ${noQuotaElapsed} ms, quota run: ${elapsed} ms ` +
-                `(${(elapsed / noQuotaElapsed).toFixed(2)}x, budget ${(
-                    noQuotaElapsed * 1.8 +
-                    2000
-                ).toFixed(0)} ms)`
-        );
-        assert.ok(
-            elapsed <= noQuotaElapsed * 1.8 + 2000,
-            `quota run ${elapsed} ms exceeded 1.8x + 2000 ms over the ${noQuotaElapsed} ms baseline`
-        );
-    });
+    await r.test(
+        '90 days, 10 doctors, 3 slots, even quotas stays near the baseline cost',
+        async () => {
+            const quota = DOCS.map((d) => `${d}:27`).join(', '); // 270 slots / 10 doctors
+            const { elapsed, result } = await generate90Days(w, quota);
+            assertValidSchedule(result);
+            // JSON round trip: summary comes from the jsdom realm, whose Array prototype differs here
+            assert.strictEqual(
+                JSON.stringify(result.summary.map((s) => s.total)),
+                JSON.stringify(DOCS.map(() => 27)),
+                'hard quota must be met exactly'
+            );
+            console.log(
+                `    no-quota run: ${noQuotaElapsed} ms, quota run: ${elapsed} ms ` +
+                    `(${(elapsed / noQuotaElapsed).toFixed(2)}x, budget ${(
+                        noQuotaElapsed * 1.8 +
+                        2000
+                    ).toFixed(0)} ms)`
+            );
+            assert.ok(
+                elapsed <= noQuotaElapsed * 1.8 + 2000,
+                `quota run ${elapsed} ms exceeded 1.8x + 2000 ms over the ${noQuotaElapsed} ms baseline`
+            );
+        }
+    );
 
     r.done();
 })();

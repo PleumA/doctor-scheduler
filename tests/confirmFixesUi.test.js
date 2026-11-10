@@ -2,7 +2,15 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { loadApp, reset: baseReset, settle, setInput, snap, runner, validIdx } = require('./domHarness');
+const {
+    loadApp,
+    reset: baseReset,
+    settle,
+    setInput,
+    snap,
+    runner,
+    validIdx,
+} = require('./domHarness');
 // No rest window: these tests make arbitrary edits, which the override validator would reject inside one
 const reset = (w, docs) => {
     baseReset(w, docs);

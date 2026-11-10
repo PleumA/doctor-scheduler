@@ -26,9 +26,15 @@ global.document = {
         click: () => {},
         remove: () => {},
     }),
-    body: { appendChild: () => {}, classList: { add: () => {}, remove: () => {}, toggle: () => {} } },
+    body: {
+        appendChild: () => {},
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    },
     addEventListener: () => {},
-    documentElement: { lang: 'en', classList: { add: () => {}, remove: () => {}, toggle: () => {} } },
+    documentElement: {
+        lang: 'en',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    },
     querySelectorAll: () => [],
 };
 global.window = {
@@ -61,18 +67,42 @@ function resetMocks() {
     doctors = [];
     offData = [];
     extraSlotsData = [];
-    mockDOM['inputMonth'] = { value: '1', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputYear'] = { value: '2026', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputDefaultSlots'] = { value: '2', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputSpecialHols'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputNoDuty'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputSpecialDocs'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputSpecialDays'] = { value: '0', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['inputMonth'] = {
+        value: '1',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputYear'] = {
+        value: '2026',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputDefaultSlots'] = {
+        value: '2',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputSpecialHols'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputNoDuty'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputSpecialDocs'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputSpecialDays'] = {
+        value: '0',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['chkUseSpecialRule'] = {
         checked: false,
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     };
-    mockDOM['inputOffDutyPeriod'] = { value: '1', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['inputOffDutyPeriod'] = {
+        value: '1',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['chkPreventLongGaps'] = {
         checked: false,
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },
@@ -85,23 +115,46 @@ function resetMocks() {
         checked: false,
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     };
-    mockDOM['chkRoleBased'] = { checked: false, classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputDoctorRoles'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['chkRoleBased'] = {
+        checked: false,
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputDoctorRoles'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['inputDefaultRoleSlots'] = {
         value: '',
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     };
-    mockDOM['inputRoleQuotas'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputConflicts'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['inputRoleQuotas'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputConflicts'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['chkCustomDateRange'] = {
         checked: false,
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },
     };
-    mockDOM['inputStartDate'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['inputEndDate'] = { value: '', classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['inputStartDate'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
+    mockDOM['inputEndDate'] = {
+        value: '',
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['toast'] = { classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
-    mockDOM['toastContent'] = { classList: { add: () => {}, remove: () => {}, toggle: () => {} }, innerHTML: '' };
-    mockDOM['resultsContainer'] = { classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
+    mockDOM['toastContent'] = {
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+        innerHTML: '',
+    };
+    mockDOM['resultsContainer'] = {
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    };
     mockDOM['emptyState'] = { classList: { add: () => {}, remove: () => {}, toggle: () => {} } };
     mockDOM['btnCalculate'] = { disabled: false, innerHTML: 'Calculate' };
     mockDOM['scheduleTableBody'] = { innerHTML: '' };

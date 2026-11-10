@@ -34,10 +34,7 @@ async function test(name, fn) {
             await w.generateSchedule();
             await settle(w);
             assert.ok(snap(w, 'globalResult'), `no schedule for ${value}`);
-            assert.ok(
-                !w.toasts.some((t) => /RangeError/.test(t.msg)),
-                `RangeError for ${value}`
-            );
+            assert.ok(!w.toasts.some((t) => /RangeError/.test(t.msg)), `RangeError for ${value}`);
         }
     });
 
@@ -77,7 +74,10 @@ async function test(name, fn) {
         w.toasts.length = 0;
         await w.generateSchedule();
         await settle(w);
-        assert.ok(w.toasts.some((t) => t.isError), JSON.stringify(w.toasts));
+        assert.ok(
+            w.toasts.some((t) => t.isError),
+            JSON.stringify(w.toasts)
+        );
     });
 
     await test('duplicate doctor names are ignored', async () => {

@@ -1,7 +1,16 @@
 // The displayed result is a self-contained snapshot: a failed or still-running regenerate must not
 // pair the displayed rows with the new period, config or doctor list.
 const assert = require('assert');
-const { loadApp, reset: baseReset, settle, setInput, snap, runner, sleep, validIdx } = require('./domHarness');
+const {
+    loadApp,
+    reset: baseReset,
+    settle,
+    setInput,
+    snap,
+    runner,
+    sleep,
+    validIdx,
+} = require('./domHarness');
 // No rest window: these tests make arbitrary edits, which the override validator would reject inside one
 const reset = (w, docs) => {
     baseReset(w, docs);
