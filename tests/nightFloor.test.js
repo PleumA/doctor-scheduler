@@ -168,9 +168,11 @@ const countDuties = (schedule) => {
         const schedule = await run();
         const row = schedule.find((r) => r.selectedDocs[0] && r.selectedDocs[0].name !== '-');
         const x = row.selectedDocs[0].name;
-        const y = ['A', 'B', 'C', 'D', 'E'].find(
-            (doc) => doc !== x && !row.selectedDocs.some((slot) => slot.name === doc)
+        // y must be clear of day-1..day+1 so the rest rule does not fire before the floor rule
+        const near = [row.day - 1, row.day, row.day + 1].flatMap((d) =>
+            schedule[d - 1] ? schedule[d - 1].selectedDocs.map((slot) => slot.name) : []
         );
+        const y = ['A', 'B', 'C', 'D', 'E'].find((doc) => !near.includes(doc));
         const before = countDuties(schedule).counts[x];
         w.toasts.length = 0;
         w.updateDoctorAssignment(row.day, 0, ['A', 'B', 'C', 'D', 'E'].indexOf(y));

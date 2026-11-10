@@ -3608,7 +3608,100 @@ function updateTargetedCellDOM(day, slotIndex) {
     if (noteCellCal) noteCellCal.innerHTML = noteHtmlCal;
 }
 
-// Apply a specific doctor change to a slot
+// Check a proposed single-slot replacement against the hard rules, on the displayed schedule.
+// Returns the first failing rule: { ok, reason, detail }.
+function validateManualAssignment(config, day, slotIndex, newDoctor) {
+    const ok = { ok: true, reason: null };
+    const fail = (reason, detail) => ({ ok: false, reason, detail });
+    const ctx = resultCtx();
+    const rows = ctx.schedule || (globalResult && globalResult.schedule) || [];
+    const row = rows[day - 1];
+    if (!row) return ok;
+    const isReal = (n) => n && n !== SHORTAGE_MARKER && n !== '-';
+    const prev = row.selectedDocs[slotIndex] && row.selectedDocs[slotIndex].name;
+    // Simulated schedule: day -> names
+    const sim = (d) =>
+        (rows[d - 1] ? rows[d - 1].selectedDocs.map((s) => s && s.name) : []).map((n, i) =>
+            d === day && i === slotIndex ? newDoctor : n
+        );
+    const isShift = !!config.isShiftBased;
+    const morning = config.morningSlots || 0;
+    const nightStart = morning + (config.afternoonSlots || 0);
+    const isNight = isShift && slotIndex >= nightStart;
+
+    if (isReal(newDoctor) && newDoctor !== prev) {
+        const today = sim(day);
+        const others = today.filter((n, i) => i !== slotIndex && isReal(n));
+        if (others.includes(newDoctor)) return fail('duplicate', `${newDoctor} is already on day ${day}`);
+        const clash = others.find((o) => config.areConflicting(newDoctor, o));
+        if (clash) return fail('conflict', `${newDoctor} conflicts with ${clash}`);
+
+        if (config.roleBased) {
+            const need = expandSlots(config.getRoleSlotsForDay(day))[slotIndex];
+            const has = (config.doctorRoles && config.doctorRoles[newDoctor]) || 'Default';
+            if (need && need !== has) return fail('role', `slot needs ${need}, ${newDoctor} is ${has}`);
+        }
+
+        const dateKey = (d) => {
+            const dt = ctx.dates && ctx.dates[d - 1];
+            if (!config.isCustomDateRange || !dt) return d;
+            const p = (n) => String(n).padStart(2, '0');
+            return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+        };
+        const offMap = config.offMap || {};
+        const offOn = (d) => (d >= 1 && d <= rows.length && offMap[dateKey(d)]) || new Set();
+        if (offOn(day).has(newDoctor)) return fail('off', `${newDoctor} requested off on day ${day}`);
+        if ((!isShift || isNight) && offOn(day + 1).has(newDoctor))
+            return fail('off', `${newDoctor} requested off on day ${day + 1}`);
+
+        const gap = config.offDutyPeriod || 1;
+        for (let k = 1; k < gap; k++) {
+            if (sim(day - k).includes(newDoctor) || sim(day + k).includes(newDoctor))
+                return fail('rest', `${newDoctor} needs ${gap} days between duties`);
+        }
+        const carried = (config.carryOver && config.carryOver.dutiesByDoctor[newDoctor]) || [];
+        for (const duty of carried) {
+            if (dayDiff(duty.date, config.periodStart) + (day - 1) < gap)
+                return fail('rest', `${newDoctor} worked ${duty.date}, inside the rest window`);
+        }
+
+        if (isShift) {
+            const inNight = (d) => sim(d).slice(nightStart).includes(newDoctor);
+            const carriedNight = (c) =>
+                carried.some((x) => x.type === 'night' && dayDiff(x.date, config.periodStart) === 1) && c;
+            if (slotIndex < morning && (inNight(day - 1) || carriedNight(day === 1)))
+                return fail('nightToMorning', `${newDoctor} worked last night`);
+            if (isNight && sim(day + 1).slice(0, morning).includes(newDoctor))
+                return fail('nightToMorning', `${newDoctor} has a morning shift tomorrow`);
+        }
+
+        const key = getQuotaKey(newDoctor, config);
+        if (config.quota && config.quota[key] !== undefined) {
+            let total = 0;
+            rows.forEach((_, i) => {
+                total += sim(i + 1).filter((n) => n === newDoctor).length;
+            });
+            if (total > config.quota[key]) return fail('quota', `${newDoctor} would exceed quota ${config.quota[key]}`);
+        }
+    }
+
+    // A manual edit may not drop a doctor below the night floor.
+    const floor = config.minNightShifts || 0;
+    if (floor > 0 && (!isShift || isNight)) {
+        const counts = {};
+        rows.forEach((_, i) => {
+            sim(i + 1).forEach((name, idx) => {
+                if (isShift && idx < nightStart) return;
+                if (isReal(name)) counts[name] = (counts[name] || 0) + 1;
+            });
+        });
+        const broken = Object.keys(counts).filter((doc) => counts[doc] < floor);
+        if (broken.length > 0)
+            return fail('floor', `${broken.join(', ')} would fall below ${floor} shifts`);
+    }
+    return ok;
+}
+
 // Apply a specific doctor change to a slot
 window.updateDoctorAssignment = function (day, slotIndex, docIndex) {
     if (!globalResult) return;
@@ -3622,35 +3715,18 @@ window.updateDoctorAssignment = function (day, slotIndex, docIndex) {
     if (!newDoctor) return;
     const config = resultConfig();
 
-    // A manual edit may not drop a doctor below the night floor.
-    const floor = config.minNightShifts || 0;
-    if (floor > 0) {
-        const isShift = !!config.isShiftBased;
-        const nightStart = (config.morningSlots || 0) + (config.afternoonSlots || 0);
-        if (!isShift || slotIndex >= nightStart) {
-            const prev = globalResult.schedule[day - 1].selectedDocs[slotIndex]?.name;
-            const counts = {};
-            globalResult.schedule.forEach((row) => {
-                row.selectedDocs.forEach((slot, idx) => {
-                    if (isShift && idx < nightStart) return;
-                    const name = slot && slot.name;
-                    if (name && name !== SHORTAGE_MARKER && name !== '-')
-                        counts[name] = (counts[name] || 0) + 1;
-                });
-            });
-            if (prev && prev !== newDoctor) counts[prev] = (counts[prev] || 0) - 1;
-            if (newDoctor !== SHORTAGE_MARKER && newDoctor !== '-')
-                counts[newDoctor] = (counts[newDoctor] || 0) + 1;
-            const broken = Object.keys(counts).filter((doc) => counts[doc] < floor);
-            if (broken.length > 0) {
-                showToast(
-                    currentLang === 'th'
-                        ? `แก้ไม่ได้: ${broken.join(', ')} จะต่ำกว่า ${floor} เวร`
-                        : `Cannot edit: ${broken.join(', ')} would fall below ${floor} shifts`,
-                    true
-                );
-                return;
-            }
+    // Hard rules first; ponytail: drag/drop swaps are two calls whose intermediate state is
+    // transiently invalid (e.g. duplicate), so they skip validation until swaps are validated as a pair.
+    if (!window.isDragAndDropOperation) {
+        const v = validateManualAssignment(config, day, slotIndex, newDoctor);
+        if (!v.ok) {
+            showToast(
+                currentLang === 'th'
+                    ? `แก้ไม่ได้ (${v.reason}): ${v.detail || ''}`
+                    : `Cannot edit (${v.reason}): ${v.detail || ''}`,
+                true
+            );
+            return;
         }
     }
 
