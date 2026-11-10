@@ -106,6 +106,20 @@ appJsCode = appJsCode.replace(
 );
 eval(appJsCode);
 
+// These tests exercise override plumbing, not the hard rules (see overrideValidation.test.js)
+const relax = () =>
+    Object.assign(globalResult.config, {
+        offDutyPeriod: 1,
+        offMap: {},
+        quota: {},
+        minNightShifts: 0,
+        roleBased: false,
+        carryOver: null,
+        areConflicting: () => false,
+    });
+const freeIdx = (day) =>
+    doctors.findIndex((d) => !globalResult.schedule[day - 1].selectedDocs.some((s) => s.name === d));
+
 async function runTests() {
     console.log('Running manualOverrides.test.js...');
     let passed = 0;
@@ -122,16 +136,18 @@ async function runTests() {
         let initialDoc = globalResult.schedule[4].selectedDocs[1].name; // Day 5, slot 1
 
         // Apply override (C is index 2 in ["A", "B", "C"])
-        global.updateDoctorAssignment(5, 1, 2); // Day 5, slot 1 -> C
+        relax();
+        const free = freeIdx(5);
+        global.updateDoctorAssignment(5, 1, free); // Day 5, slot 1 -> the doctor not on that day
 
         // Assert manualOverrides is updated correctly
-        assert.strictEqual(manualOverrides['5']['1'], 'C');
+        assert.strictEqual(manualOverrides['5']['1'], doctors[free]);
 
         // Re-generate schedule
         await global.generateSchedule();
 
         let newDoc = globalResult.schedule[4].selectedDocs[1].name;
-        assert.strictEqual(newDoc, 'C', 'Override must persist through schedule generation');
+        assert.strictEqual(newDoc, doctors[free], 'Override must persist through schedule generation');
 
         console.log('✅ TEST 1 PASSED: OVERRIDE SURVIVES RECALCULATION');
         passed++;
@@ -180,7 +196,8 @@ async function runTests() {
 
         await global.generateSchedule();
 
-        global.updateDoctorAssignment(10, 0, 1); // B is index 1
+        relax();
+        global.updateDoctorAssignment(10, 0, freeIdx(10));
         assert.strictEqual(undoStack.length, initialLen + 1, 'Undo stack should increase');
         assert.strictEqual(typeof undoStack[undoStack.length - 1], 'object');
 
@@ -301,12 +318,15 @@ async function runTests() {
             });
         });
 
+        relax();
         // Override shortage slot with doctor A
-        global.updateDoctorAssignment(shortageDay, shortageSlot, 0); // A = index 0
+        const freeDoc = freeIdx(shortageDay);
+        assert.ok(freeDoc >= 0, 'a doctor must be free that day');
+        global.updateDoctorAssignment(shortageDay, shortageSlot, freeDoc);
 
         // Verify the slot now contains doctor A
-        let overriddenDoc = globalResult.schedule[shortageDay - 1].selectedDocs[shortageSlot].name;
-        assert.strictEqual(overriddenDoc, 'A', 'Slot should now contain doctor A');
+                let overriddenDoc = globalResult.schedule[shortageDay - 1].selectedDocs[shortageSlot].name;
+        assert.strictEqual(overriddenDoc, doctors[freeDoc], 'Slot should now contain the free doctor');
 
         // Count new shortages
         let newShortages = 0;
