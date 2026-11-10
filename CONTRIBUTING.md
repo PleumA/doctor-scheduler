@@ -13,7 +13,7 @@ The application is built entirely on the client side:
 - **Excel Exports:** SheetJS (`xlsx.full.min.js` via CDN)
 - **Icons:** Lucide Icons 1.55.0 (pinned, via CDN)
 
-For a detailed walkthrough of the Monte Carlo simulation logic and constraints, please review [How the algorithm works (Technical Logic Report)](logic_report.md) before making core changes.
+For a detailed walkthrough of the solver logic and constraints, please review [How the algorithm works (Technical Logic Report)](logic_report.md) before making core changes.
 
 ## 🚀 How to Run Locally & Run Tests
 
@@ -43,7 +43,7 @@ The production CSS is compiled from `src/input.css` → `dist/output.css`:
 npm run build        # one-shot minified build
 npm run build:watch  # watch mode for development
 ```
-`index.html` already links the compiled `dist/output.css` (git-ignored), so run the build before serving.
+`index.html` links the compiled `dist/output.css`, which is **committed** (GitHub Pages serves it without a build step). Run `npm run build` and commit the result whenever you change Tailwind classes or `src/input.css`.
 
 ### Linting & Formatting
 ```bash
@@ -54,14 +54,15 @@ npm run format    # Prettier format all files
 
 ### Running Tests
 ```bash
-npm test          # Node.js built-in runner (run-tests.js) – fast, no config
+npm test          # runs all 52 suites via run-tests.js
 ```
+The last suite, `tests/playwrightE2e.test.js`, drives a real browser with `playwright-core` (a dev dependency) and **requires system Chrome** at `/usr/bin/google-chrome`; set `CHROME_PATH` to use another binary. The runner always runs it last. The solver is deterministic (seeded), so a test can assert an exact roster for fixed inputs.
 
 
 ### Checks to run before every PR
 ```bash
-npm run lint      # must report 0 errors (CI fails otherwise)
-npm test          # all suites must pass
+npm run lint      # must pass with 0 errors, no exceptions (CI fails otherwise)
+npm test          # all 52 suites must pass, Playwright included
 npm run build     # Tailwind build must succeed
 ```
 CI (`.github/workflows/ci.yml`) runs the same three.

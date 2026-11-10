@@ -8,6 +8,8 @@ Thumbs.db
 .env
 .env.*
 
-# dist/output.css is committed on purpose: GitHub Pages serves it without a build step.
+# Research: downloaded PDFs are copyrighted and the library path is machine-local
 input/library/
 .research-library
+
+# Note: dist/output.css is committed on purpose; GitHub Pages serves it without a build step.

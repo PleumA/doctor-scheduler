@@ -6,20 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 ### Added
-* **Night floor:** every doctor can be required to have at least N shifts (default 14; 0 disables). A toggleable "extra doctor on a night" plan adds one extra doctor only when needed to reach the floor, spread across the month and allocated by role need; the plan is shown above the results.
-* **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available"). While the floor is on, the rest rule (including the rest carried in from the previous period) is never relaxed: if a day cannot be filled without breaking it, the roster is refused with "Cannot fill day N ... without breaking the rest rule" (Thai and English) instead of shipping a shortage. Holiday spacing, conflicts, day-before-off and the special rule can still be relaxed, and every relaxation is recorded and listed. With the floor off (0), the solver behaves as before.
-* **Deterministic solver:** the search is seeded from the inputs, so identical inputs produce an identical roster.
-* **Playwright end-to-end suite** (`tests/playwrightE2e.test.js`) driving the system Chrome; it runs last in `npm test`.
+* **Night floor:** every doctor can be required to have at least N shifts (`#inputMinNightShifts`, default 14 in the UI, 0 disables, clamped 0-60). The "Allow an extra doctor on a night" option (`#chkAllowExtraNightDoctor`, on by default) adds at most one extra doctor per night, only on as many nights as needed, spread across the month and allocated by role need; the plan note above the results reads "Plan: N slots + M extras = T shifts → X each". The floor applies to standard, role-based and shift-night rosters; role+shift and quota modes use the legacy solver and show a warning toast.
+* **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available"). While the floor is on, the rest rule (including the rest carried in from the previous period) is never relaxed: if a day cannot be filled without breaking it, the roster is refused with "Cannot fill day N ... without breaking the rest rule" (Thai and English) instead of shipping a shortage. Holiday spacing, conflicts, day-before-off and the special rule can still be relaxed, and every relaxation is recorded and listed. With the floor off (0), the legacy cascade (levels 2-5) applies. Per-doctor capacity and role-need shortfalls are refused with their own arithmetic.
+* **Deterministic solver:** the RNG (mulberry32) is seeded from the inputs, so identical inputs produce an identical roster. The search is unchanged in shape: a baseline greedy pass plus 300 seeded candidates, scored, best kept.
+* **Playwright end-to-end suite** (`tests/playwrightE2e.test.js`) driving the system Chrome; it runs last in `npm test` (52 suites in all; set `CHROME_PATH` if Chrome is not at `/usr/bin/google-chrome`).
 * **Relaxation telemetry:** every rule the cascade gives up is recorded on `globalResult.relaxations` (`day`, `slot`, `level`, `kind`, `doctors`), scored (conflict 50 000, day-before-off 5 000, spacing/special 1 000) and listed in a per-day warnings panel; the success toast reports the warning count in Thai and English.
 * **Cross-period carry-over:** the next contiguous period inherits each doctor's last `max(offDutyPeriod, 2)` duties and enforces rest, night→morning and holiday spacing on day 1; it is rebuilt from the live schedule (including manual edits) and ignored when the period is non-contiguous or the doctor set changed.
-* Logic design document at `docs/superpowers/specs/2026-11-10-scheduler-logic-design.md`.
+* Logic design document at `docs/superpowers/specs/2026-11-10-scheduler-logic-design.md`, remaining-work plan at `docs/superpowers/plans/2026-11-10-scheduler-logic-remaining.md`, and a 30-source literature guide (`input/bibliography/literaturguide.md`, BibTeX in `output/bibtex/references.bib`).
+* **Print header** (title and period), app icon, and a coverage band (total / shortages / average) in the "duty sheet" design; see `DESIGN_SYSTEM.md`.
 
 ### Changed
-* **Off Duty Period is 0-based in the UI:** 0 = no gap, 1 = one day off after a night. Exported configs carry `configVersion: 2`; older configs are migrated automatically.
+* **Off Duty Period is 0-based in the UI:** 0 = no gap, 1 = one day off after a duty. Exported configs carry `configVersion: 2`; older configs are migrated automatically.
 * **Shift-mode feasibility** now assumes one shift per doctor per day and excludes no-duty days, instead of multiplying by the shift count.
 * Manual edits that would drop a doctor below the night floor are rejected with a toast.
 * Days without a planned extra doctor no longer show a phantom "Open" third duty cell.
-* The quota-density sort comparator reads a per-candidate suffix array of remaining availability in O(1) instead of rescanning forward per comparison; chosen rosters are unchanged.
+* **Duty-sheet restyle:** Anuphan font, ink masthead, paper/sheet surfaces, a 4px colour spine per doctor chip and a red edge on weekend/holiday rows. The fairness-row ring on the doctors furthest from the mean is now red (`signal`), was amber.
+* The quota-density sort comparator reads a per-candidate suffix array of remaining availability in O(1) instead of rescanning forward per comparison; chosen rosters are unchanged (90-day ranges with quotas about 3x faster).
 
 ### Fixed
 * **Shift-mode night floor:** morning and afternoon slots no longer take the doctors who most need nights; day slots now prefer doctors who already meet the floor, and night slots (including the planned extra) prefer those furthest below it. Feasible plans such as 7 doctors, 1 morning / 1 afternoon / 1 night, 31 days, floor 5 are no longer refused.

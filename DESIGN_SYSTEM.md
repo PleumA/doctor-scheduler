@@ -114,8 +114,38 @@ The three figures (`#statTotalDuties`, `#statShortages`, `#statAvgDuties`) sit i
   plus a 5% signal tint; doctor cells are `.doc-chip`; drag cursor is retained.
 - **Calendar**: ruled day cells, weekday headers neutral, Sunday/Saturday `signal`.
 - **Person**: single-accent duty markers (`duty` at 10%), rule borders between days.
-- **Fairness row**: one `.doc-chip` per doctor; doctors furthest from the mean get
-  `ring-1 ring-signal/60`; spread shown right-aligned.
+- **Fairness row**: one `.doc-chip` per doctor; doctors furthest from the mean get a red
+  `ring-1 ring-signal/60` (was amber); spread shown right-aligned.
+
+## Night floor controls
+
+In the settings column, under the default slot count: `#inputMinNightShifts` (number,
+0-60, default 14, 0 disables; label "Minimum shifts per doctor") and the
+`#chkAllowExtraNightDoctor` checkbox (default on; "Allow an extra doctor on a night").
+Both sit in a ruled block with a `.hint` line; reuse `.field-label`, `.hint` and the
+`accent-duty` checkbox. No new colour.
+
+## Floor plan note
+
+`#floorPlanNote` sits above the coverage band: 11px medium `ink-2` text, hidden unless a
+floor is active. Format: "Plan: N slots + M extras = T shifts → X each" (T = N + M; Thai and
+English).
+
+## Relaxation warnings panel
+
+`#relaxationPanel` is a `.sheet` with 12px `signal` text, hidden when the solver relaxed
+no rule. Title with count, a one-line `ink-2` hint, then a bulleted list with one line
+per day (date label, relaxed rule, doctor names). It is `role="status"` with
+`aria-live="polite"`.
+
+## Toasts
+
+- `#toast` is `role="status"`, `aria-atomic="true"`; `showToast` sets `aria-live` to
+  `assertive` for errors and `polite` otherwise.
+- The message span (`#toastMsg`) uses `whitespace-pre-line`, so `\n` in a message renders
+  as a line break (used by multi-line refusals such as the per-doctor capacity list).
+- Edit rejections (manual edit, drag/drop, reset-to-auto) show an error toast with the
+  rule label and detail translated to Thai or English, never a raw rule code.
 
 ## Print
 
