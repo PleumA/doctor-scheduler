@@ -55,7 +55,7 @@ function resetMocks() {
     mockDOM['inputSpecialDocs'] = { value: '' };
     mockDOM['inputSpecialDays'] = { value: '0' };
     mockDOM['chkUseSpecialRule'] = { checked: false };
-    mockDOM['inputOffDutyPeriod'] = { value: '2' };
+    mockDOM['inputOffDutyPeriod'] = { value: '1' };
     mockDOM['chkPreventLongGaps'] = { checked: false };
     mockDOM['chkBalanceShifts'] = { checked: false };
     mockDOM['chkAllowBlankDays'] = { checked: false };
@@ -144,7 +144,7 @@ runTest('TEST 1: IMPOSSIBLE QUOTA DETECTED — ABORTS', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
     mockDOM['chkAllowBlankDays'].checked = false;
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:12, B:12, C:12, D:12, E:12'; // sum 60
     global.offData = [{ names: 'A', date: '22-30' }];
 
@@ -166,7 +166,7 @@ runTest('TEST 2: FEASIBLE QUOTA — NO VIOLATION', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
     mockDOM['chkAllowBlankDays'].checked = false;
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:10, B:12, C:13, D:13, E:12'; // sum 60
     global.offData = [{ names: 'A', date: '22-30' }];
 
@@ -181,7 +181,7 @@ runTest('TEST 3: ALLOW BLANK DAYS — WARNING NOT ABORT', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
     mockDOM['chkAllowBlankDays'].checked = true;
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:12';
     global.offData = [{ names: 'A', date: '22-30' }];
 
@@ -196,7 +196,7 @@ runTest('TEST 3: ALLOW BLANK DAYS — WARNING NOT ABORT', () => {
 runTest('TEST 4: NO REST GAP — EVERY DAY AVAILABLE', () => {
     resetMocks();
     global.doctors = ['A'];
-    mockDOM['inputOffDutyPeriod'].value = '1';
+    mockDOM['inputOffDutyPeriod'].value = '0';
     mockDOM['inputSinglePoolQuota'].value = 'A:20';
     global.offData = [{ names: 'A', date: '1-5' }];
     mockDOM['chkAllowBlankDays'].checked = true;
@@ -224,7 +224,7 @@ runTest('TEST 5: ALL DOCTORS OFF SAME DAY — ROLE-BASED CHECK', () => {
     mockDOM['chkRoleBased'].checked = true;
     mockDOM['inputDoctorRoles'].value = 'A:R1, B:R1';
     mockDOM['inputRoleQuotas'].value = 'R1:10';
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['chkAllowBlankDays'].checked = true;
 
     global.offData = [{ names: 'A, B', date: '15' }];
@@ -248,7 +248,7 @@ runTest('TEST 5: ALL DOCTORS OFF SAME DAY — ROLE-BASED CHECK', () => {
 runTest('TEST 6: DOCTOR WITH ZERO AVAILABLE DAYS', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:1, B:14, C:15, D:15, E:15'; // sum 60
     global.offData = [{ names: 'A', date: '1-30' }];
 
@@ -279,7 +279,7 @@ runTest('TEST 7: CUSTOM DATE RANGE MODE — CORRECT DAYS USED', () => {
     mockDOM['inputSinglePoolQuota'].value = 'A:6, B:10, C:8, D:8, E:8'; // sum 40
     // F4 parser requires date ranges to be formatted without spaces (dd/mm/yyyy-dd/mm/yyyy)
     global.offData = [{ names: 'A', date: '25/07/2026-05/08/2026' }];
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
 
     try {
         parseUIConfig();
@@ -299,7 +299,7 @@ runTest('TEST 8: MULTIPLE DOCTORS VIOLATIONS IN ONE RUN', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
     mockDOM['chkAllowBlankDays'].checked = false;
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:16, B:16, C:10, D:10, E:8'; // sum 60
     global.offData = [
         { names: 'A', date: '1-5' },
@@ -332,7 +332,7 @@ runTest('TEST 9: NO QUOTA SET — CHECK SKIPPED', () => {
 runTest('TEST 10: 1-DAY REST GAP REDUCES MAX SHIFTS (DEFAULT)', () => {
     resetMocks();
     global.doctors = ['A', 'B', 'C', 'D', 'E'];
-    mockDOM['inputOffDutyPeriod'].value = '2';
+    mockDOM['inputOffDutyPeriod'].value = '1';
     mockDOM['inputSinglePoolQuota'].value = 'A:14, B:12, C:12, D:11, E:11'; // sum 60
     global.offData = [{ names: 'A', date: '1-5' }];
     mockDOM['chkAllowBlankDays'].checked = false;

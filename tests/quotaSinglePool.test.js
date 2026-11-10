@@ -68,7 +68,7 @@ function resetMocks() {
     mockDOM['inputSpecialHols'] = { value: '' };
     mockDOM['inputNoDuty'] = { value: '' };
     mockDOM['chkAllowBlankDays'] = { checked: false };
-    mockDOM['inputOffDutyPeriod'] = { value: '1' };
+    mockDOM['inputOffDutyPeriod'] = { value: '0' };
     mockDOM['chkBalanceShifts'] = { checked: true };
     mockDOM['btnCalculate'] = { innerHTML: 'Calc' };
 

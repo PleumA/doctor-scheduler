@@ -17,6 +17,7 @@ async function runTest(name, fn) {
 }
 
 const ORIGIN = 'https://app.test';
+const CURRENT_CACHE = fs.readFileSync('sw.js', 'utf8').match(/CACHE_NAME = '([^']+)'/)[1];
 const abs = (u) => new URL(u, `${ORIGIN}/`).href;
 
 function loadSW({ online = true, oldCaches = [], failAdd = [], seed = {}, failPut = false } = {}) {
@@ -46,7 +47,7 @@ function loadSW({ online = true, oldCaches = [], failAdd = [], seed = {}, failPu
         },
         caches: {
             open: async () => cache,
-            keys: async () => ['doctor-scheduler-v4', ...oldCaches],
+            keys: async () => [CURRENT_CACHE, ...oldCaches],
             delete: async (k) => ctx.deleted.push(k),
             match: async (r) => store.get(typeof r === 'string' ? abs(r) : r.url),
         },

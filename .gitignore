@@ -1,2 +1,13 @@
 node_modules/
 .superpowers/
+
+# Local/editor artefacts
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+
+# dist/output.css is committed on purpose: GitHub Pages serves it without a build step.
+input/library/
+.research-library

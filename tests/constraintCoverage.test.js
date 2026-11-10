@@ -97,7 +97,7 @@ function resetMocks() {
         inputSpecialDays: '0',
         inputSpecialDocs: '',
         chkUseSpecialRule: false,
-        inputOffDutyPeriod: '2',
+        inputOffDutyPeriod: '1',
         chkPreventLongGaps: false,
         chkBalanceShifts: false,
         chkAllowBlankDays: false,
@@ -164,7 +164,7 @@ async function runTest(name, testFn) {
     await runTest('TEST 1: HOLIDAY SPACING - no consecutive weekend duty (Level 1)', async () => {
         resetMocks();
         global.doctors = ['A', 'B'];
-        mockDOM['inputOffDutyPeriod'].value = '1';
+        mockDOM['inputOffDutyPeriod'].value = '0';
 
         const config = parseUIConfig();
         const cand = buildCandidate(config);
@@ -196,7 +196,7 @@ async function runTest(name, testFn) {
             global.offData = [{ id: 1, date: '16-31', names: 'A' }];
             mockDOM['chkRoleBased'].checked = false;
             mockDOM['inputSinglePoolQuota'].value = 'A:15, B:16';
-            mockDOM['inputOffDutyPeriod'].value = '1';
+            mockDOM['inputOffDutyPeriod'].value = '0';
 
             const config = parseUIConfig();
             const cand = buildCandidate(config);
@@ -243,7 +243,7 @@ async function runTest(name, testFn) {
             mockDOM['inputSpecialStartDay'].value = '1';
             mockDOM['inputSpecialDays'].value = '5'; // lock days 1-5
             mockDOM['lockConditionType'].value = 'firstNDays';
-            mockDOM['inputOffDutyPeriod'].value = '4';
+            mockDOM['inputOffDutyPeriod'].value = '3';
 
             const config = parseUIConfig();
             const cand = buildCandidate(config);
@@ -265,7 +265,7 @@ async function runTest(name, testFn) {
         global.doctors = ['A', 'B'];
         mockDOM['chkAllowBlankDays'].checked = true;
         mockDOM['inputSinglePoolQuota'].value = 'A:10, B:10';
-        mockDOM['inputOffDutyPeriod'].value = '1';
+        mockDOM['inputOffDutyPeriod'].value = '0';
 
         const config = parseUIConfig();
         const cand = buildCandidate(config);

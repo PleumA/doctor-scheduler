@@ -55,7 +55,7 @@ function resetMocks() {
     mockDOM['inputSpecialDocs'] = { value: '' };
     mockDOM['inputSpecialDays'] = { value: '0' };
     mockDOM['chkUseSpecialRule'] = { checked: false };
-    mockDOM['inputOffDutyPeriod'] = { value: '2' };
+    mockDOM['inputOffDutyPeriod'] = { value: '1' };
     mockDOM['chkPreventLongGaps'] = { checked: false };
     mockDOM['chkBalanceShifts'] = { checked: false };
     mockDOM['chkAllowBlankDays'] = { checked: false };

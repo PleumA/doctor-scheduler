@@ -22,12 +22,11 @@ const block = src.slice(
 );
 const entries = block.match(/'[^']+'/g) || [];
 
-runTest('every doctor colour uses a solid-enough fill and dark text in light mode', () => {
+runTest('every doctor colour is a spine colour with a dark-mode counterpart', () => {
     assert.ok(entries.length >= 7);
     entries.forEach((e) => {
-        assert.ok(/\bbg-[a-z]+-100\b/.test(e), `light fill should be -100: ${e}`);
-        assert.ok(/\btext-[a-z]+-800\b/.test(e), `light text should be -800: ${e}`);
-        assert.ok(/dark:text-[a-z]+-200\b/.test(e), `dark text should be -200: ${e}`);
+        assert.ok(/\bborder-l-[a-z]+-600\b/.test(e), `light spine should be -600: ${e}`);
+        assert.ok(/dark:border-l-[a-z]+-400\b/.test(e), `dark spine should be -400: ${e}`);
     });
 });
 

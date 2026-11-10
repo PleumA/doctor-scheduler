@@ -58,7 +58,7 @@ function resetMocks() {
     mockDOM['inputSpecialDocs'] = { value: '', classList: { add: () => {}, remove: () => {} } };
     mockDOM['inputSpecialDays'] = { value: '0', classList: { add: () => {}, remove: () => {} } };
     mockDOM['chkUseSpecialRule'] = { checked: false };
-    mockDOM['inputOffDutyPeriod'] = { value: '2' };
+    mockDOM['inputOffDutyPeriod'] = { value: '1' };
     mockDOM['chkPreventLongGaps'] = { checked: true }; // for Level 2
     mockDOM['chkBalanceShifts'] = { checked: false };
     mockDOM['chkAllowBlankDays'] = { checked: false };
@@ -141,7 +141,7 @@ async function runTests() {
         resetMocks();
         doctors = ['A', 'B']; // 2 doctors, 2 slots/day -> everyone works every day!
         mockDOM['inputDefaultSlots'].value = '2';
-        mockDOM['inputOffDutyPeriod'].value = '2';
+        mockDOM['inputOffDutyPeriod'].value = '1';
         mockDOM['chkAllowBlankDays'].checked = false;
 
         await window.generateSchedule();

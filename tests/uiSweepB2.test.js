@@ -66,8 +66,8 @@ const key = (w, k, e = {}) =>
 
     await test('B4 popover panel text colour is set', () => {
         const html = src('index.html');
-        assert.ok(/#settingsPanel:popover-open\s*{[^}]*color:\s*#1e293b/.test(html));
-        assert.ok(/\.dark #settingsPanel:popover-open\s*{[^}]*color:\s*#f1f5f9/.test(html));
+        assert.ok(/#settingsPanel:popover-open\s*{[^}]*color:\s*#14252c/.test(html));
+        assert.ok(/\.dark #settingsPanel:popover-open\s*{[^}]*color:\s*#e6eeec/.test(html));
     });
 
     await test('B5 mobile sheet: i18n, dialog, Escape, backdrop, focus', async () => {

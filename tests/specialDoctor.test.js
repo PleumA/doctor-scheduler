@@ -81,7 +81,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         setInput(w, 'chkUseSpecialRule', true);
         setInput(w, 'inputSpecialDocs', 'D');
         setInput(w, 'inputSpecialDays', '5');
-        setInput(w, 'inputOffDutyPeriod', '1');
+        setInput(w, 'inputOffDutyPeriod', '0');
         w.eval(`offData = [{ id: 1, date: '3', names: 'D' }];`);
         for (let k = 0; k < RUNS; k++) {
             const has = candidate()

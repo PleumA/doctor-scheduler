@@ -22,7 +22,7 @@ const EVIL = '<img src=x onerror=alert(1)>';
         setInput(w, 'chkUseSpecialRule', true);
         setInput(w, 'inputSpecialDocs', EVIL);
         setInput(w, 'inputSpecialDays', '31');
-        setInput(w, 'inputOffDutyPeriod', '1');
+        setInput(w, 'inputOffDutyPeriod', '0');
         await w.generateSchedule();
         w.setViewMode('calendar');
         const grid = d.getElementById('calendarGrid');
@@ -138,7 +138,7 @@ const EVIL = '<img src=x onerror=alert(1)>';
         setInput(w, 'chkUseSpecialRule', true);
         setInput(w, 'inputSpecialDocs', quoted);
         setInput(w, 'inputSpecialDays', '31');
-        setInput(w, 'inputOffDutyPeriod', '1');
+        setInput(w, 'inputOffDutyPeriod', '0');
         w.eval(`offData = [{ id: 1, date: '1', names: ${JSON.stringify(quoted)} }];`);
         await w.generateSchedule();
         w.updateDoctorAssignment(1, 0, 0); // targeted-update path

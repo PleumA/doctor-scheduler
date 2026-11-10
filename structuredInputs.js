@@ -91,8 +91,8 @@ function renderStructuredDoctorRoles() {
 
         html += `
         <div class="flex items-center gap-2 mb-2">
-            <input type="text" aria-label="${translations[currentLang].docListLabel}" class="doc-role-name flex-1 min-w-0 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300" value="${esc(doc)}" readonly>
-            <select data-prev="${esc(role)}" aria-label="${esc(translations[currentLang].roleSelectAria.replace('{name}', () => doc))}" class="doc-role-select w-[100px] flex-shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-slate-800 dark:text-slate-100" onchange="handleDocRoleSelectChange(this)">
+            <input type="text" aria-label="${translations[currentLang].docListLabel}" class="doc-role-name flex-1 min-w-0 bg-paper dark:bg-night border border-rule dark:border-rule-dark rounded-[3px] px-2.5 py-1.5 text-[12px] font-medium text-ink dark:text-slate-200" value="${esc(doc)}" readonly>
+            <select data-prev="${esc(role)}" aria-label="${esc(translations[currentLang].roleSelectAria.replace('{name}', () => doc))}" class="doc-role-select w-[100px] flex-shrink-0 bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-[3px] px-2 py-1.5 text-[12px] outline-none text-ink dark:text-slate-100 focus:border-duty" onchange="handleDocRoleSelectChange(this)">
                 ${roleOptions}
             </select>
         </div>
@@ -179,14 +179,14 @@ function renderStructuredRoleSlots() {
     activeRoles.forEach((role) => {
         const count = slotsMap[role] !== undefined ? slotsMap[role] : 1;
         html += `
-        <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">${esc(role)}</span>
+        <div class="flex items-center justify-between p-2 bg-white dark:bg-night border border-rule dark:border-rule-dark rounded-[3px]">
+            <span class="text-[12px] font-medium text-ink dark:text-slate-200">${esc(role)}</span>
             <div class="flex items-center gap-3">
-                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(role)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateRoleSlot(${jsArg(role)}, -1)">
+                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(role)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateRoleSlot(${jsArg(role)}, -1)">
                     <i data-lucide="minus" class="w-4 h-4"></i>
                 </button>
-                <span class="w-6 text-center text-sm font-bold">${count}</span>
-                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(role)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateRoleSlot(${jsArg(role)}, 1)">
+                <span class="w-6 text-center text-[13px] font-semibold text-ink dark:text-slate-200">${count}</span>
+                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(role)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateRoleSlot(${jsArg(role)}, 1)">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -257,14 +257,14 @@ function renderStructuredRoleQuotas() {
         const count = quotasMap[role] !== undefined ? quotasMap[role] : '';
         const displayCount = count === '' ? '-' : count;
         html += `
-        <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">${esc(role)}</span>
+        <div class="flex items-center justify-between p-2 bg-white dark:bg-night border border-rule dark:border-rule-dark rounded-[3px]">
+            <span class="text-[12px] font-medium text-ink dark:text-slate-200">${esc(role)}</span>
             <div class="flex items-center gap-3">
-                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(role)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateRoleQuota(${jsArg(role)}, -1)">
+                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(role)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateRoleQuota(${jsArg(role)}, -1)">
                     <i data-lucide="minus" class="w-4 h-4"></i>
                 </button>
-                <span class="w-6 text-center text-sm font-bold">${displayCount}</span>
-                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(role)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateRoleQuota(${jsArg(role)}, 1)">
+                <span class="w-6 text-center text-[13px] font-semibold text-ink dark:text-slate-200">${displayCount}</span>
+                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(role)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateRoleQuota(${jsArg(role)}, 1)">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -334,14 +334,14 @@ function renderStructuredSinglePoolQuotas() {
         const count = quotasMap[doc] !== undefined ? quotasMap[doc] : '';
         const displayCount = count === '' ? '-' : count;
         html += `
-        <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">${esc(doc)}</span>
+        <div class="flex items-center justify-between p-2 bg-white dark:bg-night border border-rule dark:border-rule-dark rounded-[3px]">
+            <span class="text-[12px] font-medium text-ink dark:text-slate-200">${esc(doc)}</span>
             <div class="flex items-center gap-3">
-                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(doc)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateSinglePoolQuota(${jsArg(doc)}, -1)">
+                <button type="button" aria-label="${translations[currentLang].ariaDecrease} ${esc(doc)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateSinglePoolQuota(${jsArg(doc)}, -1)">
                     <i data-lucide="minus" class="w-4 h-4"></i>
                 </button>
-                <span class="w-6 text-center text-sm font-bold">${displayCount}</span>
-                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(doc)}" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="updateSinglePoolQuota(${jsArg(doc)}, 1)">
+                <span class="w-6 text-center text-[13px] font-semibold text-ink dark:text-slate-200">${displayCount}</span>
+                <button type="button" aria-label="${translations[currentLang].ariaIncrease} ${esc(doc)}" class="w-7 h-7 flex items-center justify-center rounded-[3px] border border-rule dark:border-rule-dark bg-paper dark:bg-night text-ink-2 dark:text-slate-300 hover:border-duty hover:text-duty" onclick="updateSinglePoolQuota(${jsArg(doc)}, 1)">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -440,13 +440,13 @@ function renderStructuredConflicts(rows) {
             doc2Options += `<option value="${esc(doc2)}" selected>${esc(doc2)}</option>`;
 
         html += `
-        <div class="flex items-center gap-2 mb-2 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-            <select aria-label="${translations[currentLang].conflictDoc1Aria}" class="conflict-doc-1 flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1.5 text-sm outline-none" onchange="syncStructuredConflicts()">
+        <div class="flex items-center gap-2 mb-2 bg-paper dark:bg-night p-2 rounded-[3px] border border-rule dark:border-rule-dark">
+            <select aria-label="${translations[currentLang].conflictDoc1Aria}" class="conflict-doc-1 flex-1 bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-[3px] px-2 py-1.5 text-[12px] outline-none text-ink dark:text-slate-100" onchange="syncStructuredConflicts()">
                 <option value="">--</option>
                 ${doc1Options}
             </select>
             <span class="text-xs text-slate-500"><i data-lucide="zap" class="w-3.5 h-3.5 text-rose-400"></i></span>
-            <select aria-label="${translations[currentLang].conflictDoc2Aria}" class="conflict-doc-2 flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1.5 text-sm outline-none" onchange="syncStructuredConflicts()">
+            <select aria-label="${translations[currentLang].conflictDoc2Aria}" class="conflict-doc-2 flex-1 bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-[3px] px-2 py-1.5 text-[12px] outline-none text-ink dark:text-slate-100" onchange="syncStructuredConflicts()">
                 <option value="">--</option>
                 ${doc2Options}
             </select>
@@ -513,10 +513,10 @@ function renderStructuredChips(hiddenInputId, containerId, uiInputId) {
     items.forEach((item, idx) => {
         const tag = document.createElement('span');
         tag.className =
-            'chip-tag bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border border-teal-200/80 dark:border-teal-900/50 px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none scale-95 duration-200';
+            'chip-tag bg-white dark:bg-night text-ink dark:text-slate-200 border border-rule dark:border-rule-dark px-2 py-0.5 rounded-[3px] text-[12px] font-medium flex items-center gap-1.5 select-none';
         tag.innerHTML = `
             <span>${esc(item)}</span>
-            <button type="button" aria-label="${translations[currentLang].ariaRemove} ${esc(item)}" onclick="event.stopPropagation(); removeStructuredChip('${hiddenInputId}', ${idx})" class="text-teal-400 hover:text-teal-600 transition-colors">
+            <button type="button" aria-label="${translations[currentLang].ariaRemove} ${esc(item)}" onclick="event.stopPropagation(); removeStructuredChip('${hiddenInputId}', ${idx})" class="text-ink-2 hover:text-signal transition-colors">
                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
             </button>
         `;

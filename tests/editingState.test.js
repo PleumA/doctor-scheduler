@@ -238,7 +238,9 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
         w.toasts.length = 0;
         try {
             const first = w.generateSchedule();
-            await new Promise((r) => setTimeout(r, 80)); // inside the chunk loop
+            // Let the solver run one chunk, then change inputs: deterministic even on a fast CPU
+            // (the old fixed 80ms could land after the whole 300-iteration solve had finished).
+            await new Promise((r) => w.setTimeout(r, 0));
             w.eval(`doctors.length = 0; doctors.push('X', 'Y', 'Z')`);
             const second = w.generateSchedule();
             await Promise.all([first, second]);

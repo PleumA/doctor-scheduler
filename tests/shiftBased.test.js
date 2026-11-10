@@ -97,7 +97,7 @@ function resetMocks() {
         inputSpecialDays: '0',
         inputSpecialDocs: '',
         chkUseSpecialRule: false,
-        inputOffDutyPeriod: '1',
+        inputOffDutyPeriod: '0',
         chkPreventLongGaps: false,
         chkBalanceShifts: false,
         chkAllowBlankDays: false,

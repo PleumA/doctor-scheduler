@@ -1,6 +1,11 @@
-# Design System
+# Design System — ใบเวร / The Duty Sheet
 
-Component classes and design tokens for ระบบจัดตารางเวรอัตโนมัติ.
+The interface is modelled on the document the app produces: a printed, authoritative
+ward roster. Ink masthead, ruled sheets, the schedule grid as the hero. One interactive
+accent (duty teal); red is semantic only (weekend/holiday edge, shortage, reset).
+
+Tokens live in `tailwind.config.js`; component classes live in `src/input.css`
+(compiled to `dist/output.css` with `npm run build`).
 
 ---
 
@@ -8,157 +13,138 @@ Component classes and design tokens for ระบบจัดตารางเ�
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `primary` | `#0d3b66` | Primary brand actions, links |
-| `secondary` | `#faf0ca` | Light backgrounds, highlights |
-| `accent` | `#f4a261` | Warnings, emphasis |
-| `teal-600` | `#0d9488` | Main interactive / header |
-| `emerald-600` | `#059669` | Header gradient midpoint |
-| `indigo-600` | `#4f46e5` | Header gradient end, role badges |
+| `ink` | `#14252C` | Masthead, headings, primary text, solid buttons |
+| `ink-2` | `#3C525B` | Secondary text, labels, hints |
+| `paper` | `#F2F5F4` | Page background, nested form panels |
+| `sheet` | `#FFFFFF` | Panels (light mode) |
+| `rule` | `#D9E1DE` | Dividers, panel and table borders |
+| `duty` | `#0F766E` | The single interactive accent (links, focus, active tab) |
+| `duty-bright` | `#2DD4BF` | Duty accent on dark surfaces |
+| `signal` | `#B42318` | Weekend/holiday edge, shortages, destructive actions |
+| `signal-bright` | `#F87171` | Signal on dark surfaces |
 
-Dark-mode variants use the `dark:` prefix and slate-800/900/950 backgrounds.
+Dark mode surfaces: page `#0C171C` (`night`), panels `#112229` (`sheet-dark`),
+rules `#233A42` (`rule-dark`). Text uses `slate-100` / `slate-300` / `slate-400`.
+
+**Rules**
+- Red is never decorative. It marks weekends/holidays (left edge + 5% tint) and shortages.
+- Doctor identity is a 4px left spine on a neutral chip, not a coloured fill.
+- Do not introduce another accent for a single section. Role names and section icons are neutral.
 
 ---
 
 ## Typography
 
-- **Font**: [Sarabun](https://fonts.google.com/specimen/Sarabun) (Thai + Latin) — weights 300, 400, 500, 600, 700
-- **Base size**: 16 px / `text-base`
-- **Headings**: `font-bold text-slate-700 dark:text-slate-200`
-- **Helper text**: `text-[11px] text-slate-500 dark:text-slate-400`
-- **Labels**: `text-xs font-bold text-slate-600 dark:text-slate-400` (sentence case: Thai has no case, so all-caps would make English look heavier)
+- **Font**: [Anuphan](https://fonts.google.com/specimen/Anuphan) — loopless Thai + Latin,
+  400 / 500 / 600 / 700. Loaded from Google Fonts (also precached by `sw.js`).
+- Body inherits `font-variant-numeric: tabular-nums` so dates, counts and totals align.
+- Scale used: `11px` (meta), `12px` (labels/table meta), `13px` (body/UI),
+  `14px` (section titles), `17–20px` (page title), `22–24px` (coverage figures).
+- Weights: 400 body, 500 controls/labels, 600 section titles and figures, 700 reserved.
+- No all-caps labels, no letter-spacing tricks: Thai has no case and tracked labels
+  make English look heavy next to it.
 
 ---
 
-## Reusable Component Classes
+## Layout
 
-### `.btn-primary`
-> Confirm / Calculate actions
+- Masthead: solid ink bar, `md:sticky`, wordmark + square mark on the left,
+  ghost utility buttons and one white primary CTA on the right.
+- Desktop (`lg`): 340px settings column + fluid results column, each scrolling
+  independently (`h-[calc(100vh-112px)]`). Results stick at `top-[88px]`.
+- Phones: settings lives in the native popover drawer; schedule rows become cards
+  (see the `<style>` block in `index.html`).
+- Alignment: left for text and titles; numeric table columns centre or right as fits.
+- Radii: 4px panels/controls (`rounded-[3px]` in tables and nested rows). Shadows only
+  on overlays (drawer, dropdown, modal, toast).
+
+---
+
+## Component Classes (`src/input.css`)
+
+### `.sheet`
+The only surface: white/dark panel, 1px rule, 4px radius, no shadow.
 
 ```html
-<button class="bg-white text-teal-700 hover:bg-teal-50 dark:bg-slate-800 dark:text-teal-400
-               font-bold py-3 px-6 rounded-xl shadow-sm active:scale-95 transition-all
-               flex items-center gap-2">
-  Label
-</button>
+<div class="sheet overflow-hidden">…</div>
 ```
 
-### `.btn-ghost`
-> Header icon buttons
+### `.sheet-head` / `.sheet-title`
+Ruled section header (used as `<div>` for static cards and `<summary>` for collapsible ones).
 
 ```html
-<button class="bg-white/10 hover:bg-white/20 border border-white/10 p-2.5 rounded-xl
-               transition-all active:scale-95 text-white">
-  <i data-lucide="icon" class="w-5 h-5" aria-hidden="true"></i>
-</button>
-```
-
-### `.card`
-> Configuration panels
-
-```html
-<div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm
-            border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-  <!-- card header -->
-  <div class="bg-slate-50/50 dark:bg-slate-800/40 px-5 py-4
-              border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-    <h2 class="text-lg font-bold text-slate-700 dark:text-slate-200">Title</h2>
-  </div>
-  <!-- card body -->
-  <div class="p-5 space-y-4">…</div>
+<div class="sheet-head">
+  <h2 class="sheet-title"><i data-lucide="settings" class="w-4 h-4 text-ink-2"></i> Title</h2>
+  <!-- header controls -->
 </div>
 ```
 
-### `.input`
-> Text / number inputs
+### `.field-label`
+11px medium ink-2 label above a control.
+
+### `.hint`
+11px secondary helper text under a control.
+
+### `.doc-chip`
+Neutral tag with a 4px colour spine. Doctor colours (spine only) live in `DOC_COLORS`
+in `app.js`; `DOC_COLOR(name)` returns the chip plus its spine.
 
 ```html
-<input class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800
-              rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none
-              text-slate-800 dark:text-slate-100">
+<span class="doc-chip border-l-teal-600 dark:border-l-teal-400">Name</span>
 ```
 
-### `.tag-chip`
-> Doctor name tags inside the tag input
+### `.weekend-edge`
+Inset 3px `signal` left edge, applied to the date cell of weekend/holiday rows.
 
-```html
-<span class="inline-flex items-center gap-1 bg-teal-100 dark:bg-teal-900/40 text-teal-800
-             dark:text-teal-300 text-xs font-bold px-2 py-0.5 rounded-full">
-  Name
-  <button aria-label="Remove Name">×</button>
-</span>
-```
-
-### `.toggle`
-> On/off toggle checkbox pair
-
-```html
-<input type="checkbox" class="toggle-checkbox …">
-<label class="toggle-label …"></label>
-```
-
-### `.modal`
-> Overlay modals (manual, edit schedule)
-
-```html
-<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl
-              max-h-[90vh] overflow-y-auto">…</div>
-</div>
-```
-
-### Fairness row (`#fairnessStrip`)
-> Per-doctor totals above the schedule
-
-```html
-<span class="px-2.5 py-1 rounded-lg text-sm {doctor colour}">Name 5</span>
-<span class="px-2.5 py-1 rounded-lg text-sm {doctor colour} ring-2 ring-amber-400">Name 8</span> <!-- outlier -->
-<span class="ml-auto text-xs font-bold text-slate-500 dark:text-slate-400">Spread 5–8</span>
-```
-The doctor(s) furthest from the mean get `ring-2 ring-amber-400`; the right-aligned label shows min–max. Names are always `esc()`-ed. The per-doctor details table under it is a `<details open>` section.
-
-### Settings panel (`#settingsPanel`)
-> Inline column at >= 1024px, native popover below
-
-A `<section popover="auto">` opened by the header button (`popovertarget="settingsPanel"`). At >= 1024px it is a normal, independently scrolling column. Below 1024px (when `:popover-open` is supported) it becomes a fixed left drawer: `width: min(340px, 100vw)`, `height: 100dvh`, scrollable, with a dimmed `::backdrop`. Its colours are set explicitly (light `#f8fafc` / `#1e293b`, dark `#0f172a` / `#f1f5f9`) because the top layer does not inherit page text colour. Rarely used groups ("Doctors per day", "Advanced rules") are collapsible `<details class="group">` cards.
-
-### Phone schedule cards (< 768px)
-Each `#scheduleTableBody tr` becomes a flex-wrap card: date and day on one line, duty chips underneath; the table header (`#scheduleTableHeader`) is hidden and `table` min-width is removed. The page header is not sticky on phones.
-
-### Undo button (`#btnUndo`)
-> Secondary toolbar button, hidden until there is something to undo
-
-```html
-<button id="btnUndo" class="hidden flex items-center justify-center gap-1.5 text-xs font-bold
-        text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200
-        dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 px-3.5 py-2.5 rounded-xl">
-  <i data-lucide="undo-2" class="w-4 h-4" aria-hidden="true"></i> <span data-i18n="undoBtn">…</span>
-</button>
-```
-Sits before the rose-coloured Reset-all button; it carries `data-i18n-aria="undoBtn"`.
+### `.reveal`
+The single orchestrated motion: a 240ms fade/6px rise when a schedule is generated.
+Disabled by the global `prefers-reduced-motion` rule.
 
 ---
 
-## Spacing Scale
+## Coverage band
 
-All spacing follows Tailwind's default scale. Key layout values:
-- **Card padding**: `p-5` (1.25 rem)
-- **Card header padding**: `px-5 py-4`
-- **Section gap**: `gap-6` / `space-y-6`
-- **Input border radius**: `rounded-xl`
-- **Button border radius**: `rounded-xl`
+The three figures (`#statTotalDuties`, `#statShortages`, `#statAvgDuties`) sit in one
+`.sheet` divided by rules — not three icon cards. Values are 22–24px semibold with a
+12px unit span. A shortage tints its column with `signal` at 5% and turns the number red.
+
+## Schedule views
+
+- **Table**: sticky ruled header; date cell semibold; weekend rows get `.weekend-edge`
+  plus a 5% signal tint; doctor cells are `.doc-chip`; drag cursor is retained.
+- **Calendar**: ruled day cells, weekday headers neutral, Sunday/Saturday `signal`.
+- **Person**: single-accent duty markers (`duty` at 10%), rule borders between days.
+- **Fairness row**: one `.doc-chip` per doctor; doctors furthest from the mean get
+  `ring-1 ring-signal/60`; spread shown right-aligned.
+
+## Print
+
+Print is a first-class view: `#printHeader` (title + period) is `hidden print:block`,
+navigation/toolbars/fairness row are hidden, and the table is forced back to a real
+table layout at full width on white.
 
 ---
 
-## Dark Mode
+## Accessibility
 
-Applied via `darkMode: 'class'` — toggled by adding/removing `class="dark"` on `<html>`.
-All dark variants use the `dark:` prefix.
-
-**Contrast rule:** every light surface that gets a `dark:` background must also get a `dark:` text colour that reads on it (e.g. chips use `dark:bg-*-900/40` with `dark:text-*-300`). Only use real Tailwind shades (50-950); a nonexistent class such as `slate-150` compiles to nothing and leaves dark text on a dark background (`tests/tailwindClasses.test.js` guards this). Top-layer elements such as the popover panel set their own colours.
+- Visible `:focus-visible` outline (2px duty teal, 2px offset).
+- Colour is never the only signal: weekend rows also carry the date-cell edge; labels
+  are translated text; shares/roles are written out.
+- Text colours meet AA on their surfaces (`ink`, `ink-2`, `duty`, `signal` on white/paper).
+- Every icon-only button keeps an `aria-label`; decorative icons are `aria-hidden`.
 
 ---
 
-## Iconography
+## Iconography & app icon
 
-[Lucide Icons](https://lucide.dev) loaded via CDN, pinned (`unpkg.com/lucide@1.55.0`). Dynamic render loops use inline `<svg>` instead.
-Always add `aria-hidden="true"` to decorative icons and `aria-label` to icon-only buttons.
+[Lucide Icons](https://lucide.dev) via CDN, pinned (`unpkg.com/lucide@1.55.0`).
+Dynamic render loops use inline `<svg>`. The app icon (favicon, apple-touch-icon,
+`manifest.json`) is an ink square with a teal spine, three white roster rules and a
+red weekend edge — the same mark used in the masthead.
+
+## Dark mode
+
+`darkMode: 'class'` — toggled by adding `class="dark"` to `<html>`. Every light surface
+needs its dark counterpart (`dark:bg-sheet-dark`, `dark:border-rule-dark`,
+`dark:text-slate-*`). Only real Tailwind shades are allowed; `tests/tailwindClasses.test.js`
+guards against nonexistent classes that compile to nothing.

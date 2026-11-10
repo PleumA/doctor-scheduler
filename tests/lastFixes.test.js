@@ -67,7 +67,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
                 after.some((o) => /resetCell|reset/i.test(o.getAttribute('onclick') || '')),
                 'reset to auto present'
             );
-            const cur = after.find((o) => o.className.includes('border-teal-500'));
+            const cur = after.find((o) => o.className.includes('border-duty'));
             assert.ok(cur && cur.textContent.trim() === pick, `highlight on ${pick}`);
         });
     }
@@ -77,7 +77,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         const f = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
         assert.ok(!/text-slate-400 dark:text-slate-500 text-center/.test(f));
         assert.strictEqual(
-            (f.match(/text-slate-500 dark:text-slate-400 text-center/g) || []).length,
+            (f.match(/text-ink-2 dark:text-slate-400 text-center/g) || []).length,
             2
         );
     });

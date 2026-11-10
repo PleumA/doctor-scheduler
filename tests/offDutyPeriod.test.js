@@ -87,7 +87,7 @@ function resetMocks() {
         inputSpecialDays: '0',
         inputSpecialDocs: '',
         chkUseSpecialRule: false,
-        inputOffDutyPeriod: '2',
+        inputOffDutyPeriod: '1',
         chkPreventLongGaps: false,
         chkBalanceShifts: false,
         chkAllowBlankDays: false,
@@ -137,14 +137,14 @@ async function runTest(name, testFn) {
 }
 
 (async function runAll() {
-    // TEST 1: Rest period = 1 (no gap, back-to-back allowed)
-    await runTest('TEST 1: Rest period = 1 (no gap allowed)', async () => {
+    // TEST 1: Gap = 0 (no rest day, back-to-back allowed)
+    await runTest('TEST 1: Gap = 0 (back-to-back allowed)', async () => {
         resetMocks();
         global.doctors = ['A', 'B']; // 2 docs to pass the < 2 docs safety check
         global.offData = [
             { id: 1, date: '1-31', names: 'B' }, // B is off all month, so A must work every day
         ];
-        mockDOM['inputOffDutyPeriod'].value = '1';
+        mockDOM['inputOffDutyPeriod'].value = '0';
 
         await window.generateSchedule();
         assert.ok(globalResult, 'Schedule should generate');
@@ -152,11 +152,11 @@ async function runTest(name, testFn) {
         assert.strictEqual(globalResult.schedule[1].selectedDocs[0].name, 'A');
     });
 
-    // TEST 2: Rest period = 2 (1-day gap, old default behavior)
-    await runTest('TEST 2: Rest period = 2 (1-day gap)', async () => {
+    // TEST 2: Gap = 1 (one day off after a night)
+    await runTest('TEST 2: Gap = 1 (one day off)', async () => {
         resetMocks();
         global.doctors = ['A', 'B']; // 2 docs
-        mockDOM['inputOffDutyPeriod'].value = '2';
+        mockDOM['inputOffDutyPeriod'].value = '1';
 
         await window.generateSchedule();
         assert.ok(globalResult);
@@ -165,11 +165,11 @@ async function runTest(name, testFn) {
         assert.notStrictEqual(day1, day2, 'Doctors should alternate days due to 1-day rest gap');
     });
 
-    // TEST 3: Rest period = 3 (2-day gap)
-    await runTest('TEST 3: Rest period = 3 (2-day gap)', async () => {
+    // TEST 3: Gap = 2 (two days off after a night)
+    await runTest('TEST 3: Gap = 2 (two days off)', async () => {
         resetMocks();
         global.doctors = ['A', 'B', 'C']; // 3 docs
-        mockDOM['inputOffDutyPeriod'].value = '3';
+        mockDOM['inputOffDutyPeriod'].value = '2';
 
         await window.generateSchedule();
         const day1 = globalResult.schedule[0].selectedDocs[0].name;
@@ -189,7 +189,7 @@ async function runTest(name, testFn) {
     await runTest('TEST 4: Cascade relaxation', async () => {
         resetMocks();
         global.doctors = ['A', 'B'];
-        mockDOM['inputOffDutyPeriod'].value = '4'; // High rest requirement (3 days)
+        mockDOM['inputOffDutyPeriod'].value = '3'; // High rest requirement (3 gap days)
         // Only 2 docs available, so they MUST violate the 3-day rest to fill the schedule
 
         await window.generateSchedule();
@@ -242,7 +242,7 @@ async function runTest(name, testFn) {
     // TEST 6: Save/Load round trip
     await runTest('TEST 6: Save/Load round trip', async () => {
         resetMocks();
-        mockDOM['inputOffDutyPeriod'].value = '5';
+        mockDOM['inputOffDutyPeriod'].value = '4';
 
         // Mock export
         const originalCreate = global.document.createElement;
@@ -267,8 +267,8 @@ async function runTest(name, testFn) {
         const parsed = JSON.parse(exportedJson);
         assert.strictEqual(
             parsed.inputs.inputOffDutyPeriod,
-            '5',
-            'Should export offDutyPeriod value'
+            '4',
+            'Should export the 0-based off-duty gap'
         );
     });
 
@@ -301,8 +301,8 @@ async function runTest(name, testFn) {
 
         assert.strictEqual(
             mockDOM['inputOffDutyPeriod'].value,
-            '2',
-            'Should migrate chkPreventConsecutive: true to inputOffDutyPeriod: 2'
+            '1',
+            'Should migrate chkPreventConsecutive: true to a 1-day gap'
         );
     });
 
@@ -311,7 +311,7 @@ async function runTest(name, testFn) {
         resetMocks();
         global.doctors = ['A'];
         mockDOM['inputMonth'].value = '11'; // November has 30 days
-        mockDOM['inputOffDutyPeriod'].value = '3'; // Max shifts = Math.ceil(30 / 3) = 10
+        mockDOM['inputOffDutyPeriod'].value = '2'; // Max shifts = Math.ceil(30 / 3) = 10
         mockDOM['inputSinglePoolQuota'].value = 'A:11'; // Impossible since A can only work 10 shifts max
         mockDOM['chkAllowBlankDays'].checked = true;
 

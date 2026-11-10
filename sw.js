@@ -1,4 +1,4 @@
-const CACHE_NAME = 'doctor-scheduler-v4';
+const CACHE_NAME = 'doctor-scheduler-v5';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -10,7 +10,7 @@ const ASSETS_TO_CACHE = [
     './manifest.json',
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
     'https://unpkg.com/lucide@1.55.0',
-    'https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap',
+    'https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&display=swap',
 ];
 
 self.addEventListener('install', (event) => {

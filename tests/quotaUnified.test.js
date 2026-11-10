@@ -101,7 +101,7 @@ function resetMocks() {
     mockDOM['inputRoleQuotas'] = { value: '' };
     mockDOM['inputSinglePoolQuota'] = { value: '' };
     mockDOM['inputConflicts'] = { value: '' };
-    mockDOM['inputOffDutyPeriod'] = { value: '1' };
+    mockDOM['inputOffDutyPeriod'] = { value: '0' };
     mockDOM['chkPreventLongGaps'] = { checked: false };
     mockDOM['chkBalanceShifts'] = { checked: false };
     mockDOM['chkUseSpecialRule'] = { checked: false };

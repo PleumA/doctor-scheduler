@@ -41,8 +41,7 @@ function runTest(name, fn) {
     }
 }
 
-const cardOf = (key) =>
-    document.querySelector(`[data-i18n="${key}"]`).closest('details, div.rounded-2xl');
+const cardOf = (key) => document.querySelector(`[data-i18n="${key}"]`).closest('details, .sheet');
 
 runTest('rarely used cards are collapsible and start closed', () => {
     ['docsPerDay', 'advSettings'].forEach((key) => {
@@ -103,7 +102,7 @@ runTest('spread tile and View schedule button are gone; new keys exist in th and
 });
 
 const strip = () => document.getElementById('fairnessStrip');
-const chips = () => [...strip().querySelectorAll('span.rounded-lg')];
+const chips = () => [...strip().querySelectorAll('span.doc-chip')];
 
 runTest('fairness row: one chip per doctor, ring only on the furthest from the mean', () => {
     window.renderFairnessStrip([
@@ -114,7 +113,7 @@ runTest('fairness row: one chip per doctor, ring only on the furthest from the m
     ]);
     assert.strictEqual(chips().length, 4);
     const ringed = chips()
-        .filter((c) => c.className.includes('ring-amber-400'))
+        .filter((c) => c.className.includes('ring-signal'))
         .map((c) => c.textContent.trim());
     assert.deepStrictEqual(ringed, ['D 14']);
     assert.ok(strip().textContent.includes('10–14'), 'spread min–max shown');
@@ -125,9 +124,9 @@ runTest('fairness row: equal totals or a single doctor → no ring', () => {
         { name: 'A', total: 10 },
         { name: 'B', total: 10 },
     ]);
-    assert.strictEqual(chips().filter((c) => c.className.includes('ring-amber-400')).length, 0);
+    assert.strictEqual(chips().filter((c) => c.className.includes('ring-signal')).length, 0);
     window.renderFairnessStrip([{ name: 'A', total: 7 }]);
-    assert.strictEqual(chips().filter((c) => c.className.includes('ring-amber-400')).length, 0);
+    assert.strictEqual(chips().filter((c) => c.className.includes('ring-signal')).length, 0);
 });
 
 runTest('fairness row: names render as text (no HTML injection), empty summary clears it', () => {

@@ -141,7 +141,7 @@ function runTests() {
         mockDOM['chkUseSpecialRule'] = { checked: false };
         mockDOM['lockConditionType'] = { value: 'firstNDays' };
         mockDOM['selectLockWeekday'] = { value: '0' };
-        mockDOM['inputOffDutyPeriod'] = { value: '1' };
+        mockDOM['inputOffDutyPeriod'] = { value: '0' };
         mockDOM['chkPreventLongGaps'] = { checked: false };
         mockDOM['chkBalanceShifts'] = { checked: false };
         mockDOM['inputConflicts'] = { value: '' };

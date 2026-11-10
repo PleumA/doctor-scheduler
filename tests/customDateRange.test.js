@@ -72,7 +72,7 @@ function resetMocks() {
         checked: false,
         classList: { add: () => {}, remove: () => {} },
     };
-    mockDOM['inputOffDutyPeriod'] = { value: '2', classList: { add: () => {}, remove: () => {} } };
+    mockDOM['inputOffDutyPeriod'] = { value: '1', classList: { add: () => {}, remove: () => {} } };
     mockDOM['chkPreventLongGaps'] = {
         checked: false,
         classList: { add: () => {}, remove: () => {} },

@@ -17,21 +17,55 @@ let manualOverrides = {};
 let overridesPeriod = null;
 // Overrides from an imported file: adopted into manualOverrides only when a run commits
 let pendingOverrides = null;
+// Deterministic PRNG (mulberry32) so identical inputs produce the same roster.
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function hashString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+// Spread the planned extra night doctors across the range, weekdays first.
+function chooseExtraNightDays(nightDays, holidaySet, count) {
+    if (count <= 0) return [];
+    const pool = nightDays
+        .filter((d) => !holidaySet.has(d))
+        .concat(nightDays.filter((d) => holidaySet.has(d)));
+    const chosen = [];
+    const step = pool.length / count;
+    for (let i = 0; i < count; i++) {
+        let idx = Math.min(pool.length - 1, Math.floor((i + 0.5) * step));
+        while (chosen.includes(pool[idx])) idx = (idx + 1) % pool.length;
+        chosen.push(pool[idx]);
+    }
+    return chosen.sort((a, b) => a - b);
+}
 const warnedChips = new Set(); // day chips already reported as dropped
 let quota = {};
 
-// Shared doctor badge color palette (indexed by doctor order)
+// Shared doctor tag palette (indexed by doctor order). The chip itself is neutral;
+// the 4px left spine carries the doctor's colour — see .doc-chip in src/input.css.
 const DOC_COLORS = [
-    'bg-teal-100 dark:bg-teal-900/50 border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-200',
-    'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200',
-    'bg-emerald-100 dark:bg-emerald-900/50 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200',
-    'bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200',
-    'bg-purple-100 dark:bg-purple-900/50 border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-200',
-    'bg-sky-100 dark:bg-sky-900/50 border-sky-300 dark:border-sky-700 text-sky-800 dark:text-sky-200',
-    'bg-rose-100 dark:bg-rose-900/50 border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200',
+    'border-l-teal-600 dark:border-l-teal-400',
+    'border-l-indigo-600 dark:border-l-indigo-400',
+    'border-l-emerald-600 dark:border-l-emerald-400',
+    'border-l-amber-600 dark:border-l-amber-400',
+    'border-l-purple-600 dark:border-l-purple-400',
+    'border-l-sky-600 dark:border-l-sky-400',
+    'border-l-rose-600 dark:border-l-rose-400',
 ];
 const DOC_COLOR = (doc) =>
-    DOC_COLORS[resultCtx().doctors.indexOf(doc) % DOC_COLORS.length] + ' font-bold';
+    'doc-chip ' + DOC_COLORS[resultCtx().doctors.indexOf(doc) % DOC_COLORS.length];
 
 // Locale-aware day/month name helpers (replaces duplicated name arrays)
 const localeTag = () => (currentLang === 'th' ? 'th-TH' : 'en-US');
@@ -660,12 +694,11 @@ function renderDoctorTags() {
     // Draw tag badges
     doctors.forEach((doc, index) => {
         const tag = document.createElement('span');
-        tag.className =
-            'doctor-tag bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border border-teal-200/80 dark:border-teal-900/50 px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none scale-95 duration-200';
+        tag.className = 'doctor-tag ' + DOC_COLOR(doc) + ' select-none';
         tag.innerHTML = `
             <span></span>
-            <button type="button" aria-label="${translations[currentLang].ariaRemove} ${esc(doc)}" onclick="event.stopPropagation(); removeDoctor(${index})" class="text-teal-400 hover:text-teal-600 transition-colors">
-                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            <button type="button" aria-label="${translations[currentLang].ariaRemove} ${esc(doc)}" onclick="event.stopPropagation(); removeDoctor(${index})" class="text-ink-2 hover:text-signal transition-colors">
+                <i data-lucide="x" class="w-3 h-3"></i>
             </button>
         `;
         tag.querySelector('span').textContent = doc;
@@ -775,7 +808,7 @@ function getDropdownOptionsHtml(reqId, selectedNamesStr) {
     doctors.forEach((doc, index) => {
         const isChecked = selectedNames.includes(doc) ? 'checked' : '';
         optionsHtml += `
-            <label class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer text-sm font-semibold border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <label class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-paper dark:hover:bg-night cursor-pointer text-[13px] font-medium border-b border-rule dark:border-rule-dark last:border-0">
                 <input type="checkbox" value="${esc(doc)}" ${isChecked} onchange="toggleOffDoctorByIndex(${reqId}, ${index}, this.checked)" class="rounded text-orange-500 focus:ring-orange-200 w-4 h-4 dark:border-slate-700 dark:bg-slate-900">
                 <span class="text-slate-700 dark:text-slate-200">${esc(doc)}</span>
             </label>
@@ -898,11 +931,10 @@ function toggleSpecialRuleUI() {
 
     if (isChecked) {
         container.className =
-            'rounded-2xl shadow-sm border bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900 transition-all overflow-hidden';
+            'sheet transition-all overflow-hidden border-duty/40 dark:border-duty-bright/30';
         body.style.display = 'block';
     } else {
-        container.className =
-            'rounded-2xl shadow-sm border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 transition-all overflow-hidden';
+        container.className = 'sheet transition-all overflow-hidden';
         body.style.display = 'none';
     }
     toggleLockConditionUI();
@@ -937,12 +969,12 @@ function showToast(msg, isError = false) {
 
     if (isError) {
         toastContent.className =
-            'flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm border bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/50';
-        toastContent.innerHTML = `<i data-lucide="alert-circle" class="w-6 h-6 text-red-500"></i> <span id="toastMsg">${safeMsg}</span>`;
+            'flex items-center gap-3 px-4 py-3 rounded-md shadow-2xl font-medium text-[13px] border bg-signal/10 text-signal dark:text-signal-bright border-signal/30';
+        toastContent.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5 text-signal-bright"></i> <span id="toastMsg">${safeMsg}</span>`;
     } else {
         toastContent.className =
-            'flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm border bg-slate-800 dark:bg-slate-950 text-white border-slate-700 dark:border-slate-800';
-        toastContent.innerHTML = `<i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-400"></i> <span id="toastMsg">${safeMsg}</span>`;
+            'flex items-center gap-3 px-4 py-3 rounded-md shadow-2xl font-medium text-[13px] border bg-ink dark:bg-sheet-dark text-white border-ink dark:border-rule-dark';
+        toastContent.innerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-duty-bright"></i> <span id="toastMsg">${safeMsg}</span>`;
     }
     lucide.createIcons();
 
@@ -966,7 +998,7 @@ function renderOffRequests() {
     offData.forEach((req) => {
         const div = document.createElement('div');
         div.className =
-            'flex gap-2 items-center bg-slate-50 dark:bg-slate-950 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800';
+            'flex gap-2 items-center bg-paper dark:bg-night p-2 rounded-[3px] border border-rule dark:border-rule-dark';
 
         const optionsHtml = getDropdownOptionsHtml(req.id, req.names);
         const selectedNames = req.names
@@ -976,18 +1008,18 @@ function renderOffRequests() {
 
         div.innerHTML = `
             <div class="${isCustomDateRange ? 'w-56' : 'w-48'} shrink-0 font-sans">
-                <input type="text" aria-label="${translations[currentLang].tableDateCol}" placeholder="${isCustomDateRange ? (currentLang === 'th' ? 'เช่น 20/05/2026 หรือ 25/02/2026-04/03/2026' : 'e.g. 20/05/2026, or 25/02/2026-04/03/2026') : currentLang === 'th' ? 'เช่น 5, 12 หรือ 2-10' : 'e.g. 5, 12, or 2-10'}" value="${esc(req.date)}" onchange="updateOffRow(${req.id}, 'date', this.value)" class="w-full text-center border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-slate-100">
+                <input type="text" aria-label="${translations[currentLang].tableDateCol}" placeholder="${isCustomDateRange ? (currentLang === 'th' ? 'เช่น 20/05/2026 หรือ 25/02/2026-04/03/2026' : 'e.g. 20/05/2026, or 25/02/2026-04/03/2026') : currentLang === 'th' ? 'เช่น 5, 12 หรือ 2-10' : 'e.g. 5, 12, or 2-10'}" value="${esc(req.date)}" onchange="updateOffRow(${req.id}, 'date', this.value)" class="w-full text-center border border-rule dark:border-rule-dark rounded-[3px] py-1.5 text-[12px] outline-none focus:border-duty bg-white dark:bg-night font-medium text-ink dark:text-slate-100">
             </div>
             <div class="relative flex-1">
-                <button type="button" onclick="toggleDropdown(event, 'dropdown-${req.id}')" class="w-full text-left border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-900 flex justify-between items-center hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                <button type="button" onclick="toggleDropdown(event, 'dropdown-${req.id}')" class="w-full text-left border border-rule dark:border-rule-dark rounded-[3px] px-2.5 py-1.5 text-[12px] bg-white dark:bg-night flex justify-between items-center hover:border-duty transition-colors">
                     <span id="offReqBtnText-${req.id}" class="truncate text-slate-700 dark:text-slate-200 font-semibold">${selectedNames.length > 0 ? esc(selectedNames.join(', ')) : currentLang === 'th' ? 'เลือกแพทย์...' : 'Select...'}</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 shrink-0"></i>
                 </button>
-                <div id="dropdown-${req.id}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
+                <div id="dropdown-${req.id}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-full bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-md shadow-lg z-50 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
                     ${optionsHtml}
                 </div>
             </div>
-            <button type="button" onclick="deleteOffRow(${req.id})" aria-label="${translations[currentLang].ariaRemove}${req.date ? ' ' + esc(req.date) : ''}" class="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 p-1.5 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            <button type="button" onclick="deleteOffRow(${req.id})" aria-label="${translations[currentLang].ariaRemove}${req.date ? ' ' + esc(req.date) : ''}" class="text-ink-2 hover:text-signal hover:bg-signal/5 p-1.5 rounded-[3px] transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         `;
         container.appendChild(div);
     });
@@ -1026,11 +1058,11 @@ function renderExtraSlots() {
         div.innerHTML = `
             <div class="w-20 shrink-0">
                 <label for="extraDate-${item.id}" class="text-[10px] text-slate-500 dark:text-slate-400 block">${translations[currentLang].tableDateCol}</label>
-                <input type="number" id="extraDate-${item.id}" min="1" max="31" value="${esc(item.date)}" onchange="updateExtraSlot(${item.id}, 'date', this.value)" class="w-full text-center border border-slate-200 dark:border-slate-800 rounded py-1 text-sm outline-none bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-slate-100">
+                <input type="number" id="extraDate-${item.id}" min="1" max="31" value="${esc(item.date)}" onchange="updateExtraSlot(${item.id}, 'date', this.value)" class="w-full text-center border border-rule dark:border-rule-dark rounded-[3px] py-1 text-[12px] outline-none bg-white dark:bg-night font-medium text-ink dark:text-slate-100">
             </div>
             <div class="w-28 shrink-0">
                 <label for="extraSlots-${item.id}" class="text-[10px] text-slate-500 dark:text-slate-400 block">${translations[currentLang].defaultSlots}</label>
-                <input type="text" id="extraSlots-${item.id}" value="${esc(item.slots)}" onchange="updateExtraSlot(${item.id}, 'slots', this.value)" class="w-full text-center border border-slate-200 dark:border-slate-800 rounded py-1 text-xs outline-none bg-white dark:bg-slate-900 font-bold text-slate-800 dark:text-slate-100" placeholder="${esc(translations[currentLang].extraSlotPlaceholder)}">
+                <input type="text" id="extraSlots-${item.id}" value="${esc(item.slots)}" onchange="updateExtraSlot(${item.id}, 'slots', this.value)" class="w-full text-center border border-rule dark:border-rule-dark rounded-[3px] py-1 text-[11px] outline-none bg-white dark:bg-night font-medium text-ink dark:text-slate-100" placeholder="${esc(translations[currentLang].extraSlotPlaceholder)}">
             </div>
             <button onclick="deleteExtraSlot(${item.id})" aria-label="${translations[currentLang].ariaRemove} ${esc(item.date)}" class="text-slate-400 hover:text-red-500 p-1 rounded transition-colors mt-4"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         `;
@@ -1077,7 +1109,7 @@ window.setViewMode = function (mode) {
     [btnTable, btnCal, btnPerson].forEach((btn) => {
         if (btn)
             btn.className =
-                'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
+                'px-3 py-1.5 text-[11px] font-medium rounded-[3px] transition-colors flex items-center gap-1.5 text-ink-2 dark:text-slate-400 hover:text-ink dark:hover:text-slate-100';
     });
 
     // Hide all
@@ -1086,7 +1118,7 @@ window.setViewMode = function (mode) {
     if (personContainer) personContainer.classList.add('hidden');
 
     const activeClass =
-        'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm border border-slate-200/50 dark:border-slate-700';
+        'px-3 py-1.5 text-[11px] font-medium rounded-[3px] transition-colors flex items-center gap-1.5 bg-white dark:bg-sheet-dark text-ink dark:text-slate-100 shadow-sm';
 
     if (mode === 'table') {
         if (btnTable) btnTable.className = activeClass;
@@ -1124,10 +1156,18 @@ function parseUIConfig() {
         document.getElementById('selectLockWeekday')?.value !== undefined
             ? parseInt(document.getElementById('selectLockWeekday').value)
             : 0;
-    const offDutyPeriod = Math.max(
-        1,
-        Math.min(7, parseInt(document.getElementById('inputOffDutyPeriod')?.value) || 2)
-    );
+    // The UI is 0-based: 0 = no gap, 1 = one day off after a night.
+    // The solver keeps its 1-based offDutyPeriod internally for compatibility.
+    const offDutyGapRaw = parseInt(document.getElementById('inputOffDutyPeriod')?.value, 10);
+    const offDutyGap = Number.isFinite(offDutyGapRaw) ? Math.max(0, Math.min(6, offDutyGapRaw)) : 1;
+    const offDutyPeriod = offDutyGap + 1;
+    const minShiftsEl = document.getElementById('inputMinNightShifts');
+    const minShiftsRaw = minShiftsEl ? parseInt(minShiftsEl.value, 10) : NaN;
+    const minNightShifts = Number.isFinite(minShiftsRaw)
+        ? Math.max(0, Math.min(60, minShiftsRaw))
+        : 0;
+    const allowExtraEl = document.getElementById('chkAllowExtraNightDoctor');
+    const allowExtraNightDoctor = allowExtraEl ? !!allowExtraEl.checked : true;
     const preventLongGaps = document.getElementById('chkPreventLongGaps').checked;
     const balanceShifts = document.getElementById('chkBalanceShifts')?.checked;
     const allowBlankDays = document.getElementById('chkAllowBlankDays')?.checked;
@@ -1651,6 +1691,8 @@ function parseUIConfig() {
         morningSlots,
         afternoonSlots,
         nightSlots,
+        minNightShifts,
+        allowExtraNightDoctor,
     };
 
     // Warning: With 2 slots but only 2 doctors, the same pair is forced to repeat
@@ -1721,6 +1763,192 @@ function parseUIConfig() {
         }
     }
 
+    configObj.solverSeed = hashString(
+        JSON.stringify({
+            doctors,
+            offData,
+            extraSlotsData,
+            month,
+            year,
+            numDays,
+            isCustomDateRange,
+            roleBased,
+            isShiftBased,
+            defaultSlots,
+            defaultRoleSlots,
+            quota,
+            offDutyPeriod,
+            minNightShifts,
+            allowExtraNightDoctor,
+            holidays: Array.from(holidaySet),
+            noDuty: Array.from(noDutySet),
+        })
+    );
+    configObj.rng = mulberry32(configObj.solverSeed);
+
+    // Night floor + extra-doctor plan. Applies to standard and role-based rosters;
+    // shift-based and quota-driven rosters stay on the legacy solver for now.
+    const floorApplies = minNightShifts > 0 && !hasQuotas && !(roleBased && isShiftBased);
+    configObj.minNightShifts = floorApplies ? minNightShifts : 0;
+    if (
+        minNightShifts > 0 &&
+        !floorApplies &&
+        typeof showToast === 'function' &&
+        !window.floorModeWarningShown
+    ) {
+        window.floorModeWarningShown = true;
+        showToast(
+            currentLang === 'th'
+                ? 'ขั้นต่ำเวรใช้กับโหมดปกติ แยกบทบาท และกะกลางคืนเท่านั้น — โหมดกะ+บทบาทและโควตายังใช้ระบบเดิม'
+                : 'The shift minimum applies to standard, role-based and shift-night rosters; role+shift and quota modes use the legacy solver.',
+            true
+        );
+    }
+    let floorPlanError = null;
+    try {
+        if (floorApplies) {
+            const nightDays = [];
+            for (let d = 1; d <= numDays; d++) if (!noDutySet.has(d)) nightDays.push(d);
+            const keyForDay = (d) => {
+                if (!isCustomDateRange) return d;
+                const dt = scheduleDates[d - 1];
+                return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+            };
+            let baseSlots = 0;
+            nightDays.forEach((d) => {
+                if (isShiftBased) {
+                    baseSlots += nightSlots;
+                    return;
+                }
+                const daySlots = getRoleSlotsForDay(d);
+                Object.values(daySlots).forEach((count) => {
+                    baseSlots += count || 0;
+                });
+            });
+            const required = doctors.length * minNightShifts;
+            const maxSlots = baseSlots + nightDays.length;
+
+            // Per-doctor capacity with rest gaps and off requests (earliest-first is optimal).
+            const shortCapacity = [];
+            doctors.forEach((doc) => {
+                let count = 0;
+                let last = -99;
+                nightDays.forEach((d) => {
+                    const offSet = offMap[keyForDay(d)] || new Set();
+                    if (offSet.has(doc)) return;
+                    if (d - last >= offDutyPeriod) {
+                        count++;
+                        last = d;
+                    }
+                });
+                if (count < minNightShifts) shortCapacity.push({ doc, max: count });
+            });
+            if (shortCapacity.length > 0) {
+                throw new Error(
+                    currentLang === 'th'
+                        ? shortCapacity
+                              .map(
+                                  (c) =>
+                                      `นพ./พญ. ${c.doc}: ขั้นต่ำ ${minNightShifts} เวร แต่ทำได้สูงสุด ${c.max} เวร`
+                              )
+                              .join('\n')
+                        : shortCapacity
+                              .map(
+                                  (c) =>
+                                      `Dr. ${c.doc}: minimum ${minNightShifts} shifts, but at most ${c.max} are possible`
+                              )
+                              .join('\n')
+                );
+            }
+            if (required > maxSlots) {
+                throw new Error(
+                    currentLang === 'th'
+                        ? `ต้องมี ${required} เวร (${doctors.length} คน × ${minNightShifts}) แต่มี ${baseSlots} ช่อง + แพทย์เสริมได้อีก ${nightDays.length} = ${maxSlots} — ไม่พอ`
+                        : `Need ${required} shifts (${doctors.length} doctors × ${minNightShifts}) but only ${baseSlots} slots + ${nightDays.length} possible extras = ${maxSlots} — not enough`
+                );
+            }
+            if (required > baseSlots && !allowExtraNightDoctor) {
+                throw new Error(
+                    currentLang === 'th'
+                        ? `ต้องมี ${required} เวร แต่มี ${baseSlots} ช่อง และปิดแพทย์เสริม — เปิดแพทย์เสริมหรือลดขั้นต่ำ`
+                        : `Need ${required} shifts but there are ${baseSlots} slots and extra doctors are off — enable extras or lower the minimum`
+                );
+            }
+            const extrasNeeded = Math.max(0, required - baseSlots);
+            const extraDays = chooseExtraNightDays(nightDays, holidaySet, extrasNeeded);
+
+            // In role mode, extras must go to the role that is short of its own floor.
+            const baseByRole = {};
+            const doctorsByRole = {};
+            if (roleBased && !isShiftBased) {
+                nightDays.forEach((d) => {
+                    const daySlots = getRoleSlotsForDay(d);
+                    Object.entries(daySlots).forEach(([role, count]) => {
+                        baseByRole[role] = (baseByRole[role] || 0) + (count || 0);
+                    });
+                });
+                doctors.forEach((doc) => {
+                    const role = doctorRoles[doc] || 'Default';
+                    doctorsByRole[role] = (doctorsByRole[role] || 0) + 1;
+                });
+                const roleNeed = {};
+                Object.keys(doctorsByRole).forEach((role) => {
+                    roleNeed[role] = Math.max(
+                        0,
+                        doctorsByRole[role] * minNightShifts - (baseByRole[role] || 0)
+                    );
+                });
+                const totalRoleNeed = Object.values(roleNeed).reduce((a, n) => a + n, 0);
+                if (totalRoleNeed > extrasNeeded) {
+                    throw new Error(
+                        currentLang === 'th'
+                            ? `ขั้นต่ำ ${minNightShifts} เวรต่อคนเป็นไปไม่ได้ตามบทบาท — ต้องเพิ่ม ${totalRoleNeed} ช่อง แต่เพิ่มแพทย์เสริมได้ ${extrasNeeded}`
+                            : `The ${minNightShifts}-shift minimum is impossible per role — ${totalRoleNeed} extra slots needed, only ${extrasNeeded} possible`
+                    );
+                }
+                if (extraDays.length > 0) {
+                    // Fix the role of each extra night once, at plan time.
+                    const extraRoleByDay = {};
+                    const fallbackRole = Object.keys(doctorsByRole)[0] || 'Default';
+                    extraDays.forEach((day) => {
+                        const rolesWithNeed = Object.keys(roleNeed)
+                            .filter((role) => roleNeed[role] > 0)
+                            .sort((a, b) => roleNeed[b] - roleNeed[a]);
+                        const role = rolesWithNeed[0] || fallbackRole;
+                        extraRoleByDay[day] = role;
+                        if (roleNeed[role] > 0) roleNeed[role]--;
+                    });
+                    const baseGetSlots = configObj.getRoleSlotsForDay;
+                    configObj.getRoleSlotsForDay = (day) => {
+                        const slots = baseGetSlots(day);
+                        const role = extraRoleByDay[day];
+                        if (role) slots[role] = (slots[role] || 0) + 1;
+                        return slots;
+                    };
+                }
+            } else if (extraDays.length > 0) {
+                const extraSet = new Set(extraDays);
+                const baseGetSlots = configObj.getRoleSlotsForDay;
+                configObj.getRoleSlotsForDay = (day) => {
+                    const slots = baseGetSlots(day);
+                    if (extraSet.has(day)) slots.Default = (slots.Default || 0) + 1;
+                    return slots;
+                };
+            }
+            configObj.extraNightDays = extraDays;
+            configObj.floorPlan = {
+                baseSlots,
+                required,
+                maxSlots,
+                extrasNeeded,
+                nights: nightDays.length,
+            };
+        }
+    } catch (error) {
+        floorPlanError = error.message;
+    }
+    configObj.floorPlan = { ...(configObj.floorPlan || {}), error: floorPlanError };
+
     return configObj;
 }
 
@@ -1741,8 +1969,6 @@ function checkQuotaFeasibility(config) {
         afternoonSlots,
         nightSlots,
     } = config;
-    const multiplier = isShiftBased ? morningSlots + afternoonSlots + nightSlots : 1;
-
     Object.keys(quota).forEach((key) => {
         const required = quota[key];
         if (required <= 0) return;
@@ -1777,11 +2003,10 @@ function checkQuotaFeasibility(config) {
                     }
                 }
 
-                const docAvailDays = numDays - docOffCount;
+                const activeDays = numDays - (config.noDutySet ? config.noDutySet.size : 0);
+                const docAvailDays = Math.max(0, activeDays - docOffCount);
                 const restGap = getRestDaysForDoctor(docName, config);
-                const maxShifts =
-                    (docAvailDays > 0 ? Math.floor((docAvailDays + restGap - 1) / restGap) : 0) *
-                    multiplier;
+                const maxShifts = docAvailDays > 0 ? Math.ceil(docAvailDays / restGap) : 0;
 
                 if (required > maxShifts) {
                     violations.push({
@@ -1819,11 +2044,10 @@ function checkQuotaFeasibility(config) {
                 }
             }
 
-            const availableDays = numDays - offCount;
+            const activeDays = numDays - (config.noDutySet ? config.noDutySet.size : 0);
+            const availableDays = Math.max(0, activeDays - offCount);
             const restGap = getRestDaysForDoctor(doctorName, config);
-            const maxShifts =
-                (availableDays > 0 ? Math.floor((availableDays + restGap - 1) / restGap) : 0) *
-                multiplier;
+            const maxShifts = availableDays > 0 ? Math.ceil(availableDays / restGap) : 0;
 
             if (required > maxShifts) {
                 violations.push({
@@ -1869,6 +2093,8 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         afternoonSlots,
         nightSlots,
     } = config;
+
+    const rng = config && typeof config.rng === 'function' ? config.rng : Math.random;
 
     const wCounts = {};
     const hCounts = {};
@@ -1916,10 +2142,22 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
     const sortDoctors = (docsList, isHol, currentDay) => {
         const noise = {};
         docsList.forEach((doc) => {
-            noise[doc] = (Math.random() - 0.5) * randomness;
+            noise[doc] = (rng() - 0.5) * randomness;
         });
 
         docsList.sort((a, b) => {
+            // Priority 0: Night floor (shift mode counts nights; standard counts all duties)
+            const floor = config.minNightShifts || 0;
+            if (floor > 0) {
+                const countFor = (doc) => (isShiftBased ? nCounts[doc] : tCounts[doc]);
+                const aCount = countFor(a);
+                const bCount = countFor(b);
+                const aBelow = aCount < floor;
+                const bBelow = bCount < floor;
+                if (aBelow !== bBelow) return aBelow ? -1 : 1;
+                if (aCount !== bCount) return aCount - bCount;
+            }
+
             // Priority 1: Minimum Shift Quota Fulfillment
             if (hasQuotas) {
                 const keyA = getQuotaKey(a, config);
@@ -2200,7 +2438,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                             }
                             if (slotsLeft > quotaLeft && quotaLeft > 0 && randomness > 0) {
                                 const blankProb = (slotsLeft - quotaLeft) / slotsLeft;
-                                if (Math.random() < blankProb * (0.8 + Math.random() * 0.4)) {
+                                if (rng() < blankProb * (0.8 + rng() * 0.4)) {
                                     availableDocs = []; // Force blank
                                 }
                             }
@@ -2298,6 +2536,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         wCounts,
         hCounts,
         tCounts,
+        nCounts,
         maxSlots: maxSlotsFound,
         config: config,
     };
@@ -2318,6 +2557,19 @@ function scoreSchedule(candidate) {
         });
     });
     score -= shortages * 15000;
+
+    // 1b. The night floor is effectively lexicographic: any shortfall loses to any schedule without one.
+    const floor = candidate.config?.minNightShifts || 0;
+    if (floor > 0) {
+        let shortfall = 0;
+        doctors.forEach((doc) => {
+            const count = candidate.config?.isShiftBased
+                ? (candidate.nCounts?.[doc] ?? 0)
+                : (candidate.tCounts?.[doc] ?? 0);
+            if (count < floor) shortfall += floor - count;
+        });
+        score -= shortfall * 100000;
+    }
 
     // 2. Workload balance (Standard Deviation)
     const totals = Object.values(candidate.tCounts);
@@ -2503,6 +2755,7 @@ window.generateSchedule = function () {
 
 async function runScheduleOnce() {
     window.lockWarningShown = false;
+    window.floorModeWarningShown = false;
 
     const btn = document.getElementById('btnCalculate');
     let originalHtml = '';
@@ -2599,6 +2852,9 @@ async function runScheduleOnce() {
         // Yield to allow browser to render the disabled state, loader spinner, and toast
         // Parse config ONCE, before the first await, so later input changes cannot mix into this run
         const config = parseUIConfig();
+        if (config.floorPlan && config.floorPlan.error) {
+            throw new Error(config.floorPlan.error);
+        }
         // Everything the finished result needs from live state, captured with the config
         const snapshot = {
             month,
@@ -2684,6 +2940,37 @@ async function runScheduleOnce() {
             updateDayNote(row, null, config, snapshot);
         });
 
+        // Final floor verification: never render a roster that missed the minimum.
+        if (config.minNightShifts > 0) {
+            const floorCounts = config.isShiftBased ? bestCandidate.nCounts : {};
+            if (!config.isShiftBased) {
+                bestCandidate.schedule.forEach((row) => {
+                    row.selectedDocs.forEach((slot) => {
+                        if (slot && slot.name && slot.name !== SHORTAGE_MARKER && slot.name !== '-')
+                            floorCounts[slot.name] = (floorCounts[slot.name] || 0) + 1;
+                    });
+                });
+            }
+            const short = doctors.filter((doc) => (floorCounts[doc] || 0) < config.minNightShifts);
+            if (short.length > 0) {
+                throw new Error(
+                    currentLang === 'th'
+                        ? `จัดไม่ได้ตามขั้นต่ำ: ${short
+                              .map(
+                                  (doc) =>
+                                      `${doc} ได้ ${floorCounts[doc] || 0}/${config.minNightShifts}`
+                              )
+                              .join(', ')}`
+                        : `Could not reach the minimum: ${short
+                              .map(
+                                  (doc) =>
+                                      `${doc} got ${floorCounts[doc] || 0}/${config.minNightShifts}`
+                              )
+                              .join(', ')}`
+                );
+            }
+        }
+
         // Exports, edits and views of this result read this snapshot, never later input changes
         globalResult = {
             schedule: JSON.parse(JSON.stringify(bestCandidate.schedule)),
@@ -2716,7 +3003,10 @@ async function runScheduleOnce() {
         updateStatsDashboard();
 
         document.getElementById('emptyState').classList.add('hidden');
-        document.getElementById('resultsContainer').classList.remove('hidden');
+        const resultsEl = document.getElementById('resultsContainer');
+        resultsEl.classList.remove('hidden', 'reveal');
+        void resultsEl.offsetWidth;
+        resultsEl.classList.add('reveal');
 
         if (btn) {
             btn.disabled = false;
@@ -3060,18 +3350,16 @@ function updateTargetedCellDOM(day, slotIndex) {
 
     // Calculate new styles
     let badgeClass =
-        'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
-    let calBadgeClass =
-        'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
+        'bg-white dark:bg-night border border-rule dark:border-rule-dark text-ink-2 dark:text-slate-300';
+    let calBadgeClass = badgeClass;
 
     if (docName === SHORTAGE_MARKER && !row.isNoDuty) {
         badgeClass =
-            'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-bold';
-        calBadgeClass =
-            'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-bold animate-pulse';
+            'bg-signal/5 dark:bg-signal-bright/10 border border-signal/30 dark:border-signal-bright/30 text-signal dark:text-signal-bright font-medium';
+        calBadgeClass = badgeClass;
     } else if (docName === '-' || docName === '' || row.isNoDuty) {
         badgeClass =
-            'text-slate-300 dark:text-slate-600 bg-transparent border-dashed border-slate-200 dark:border-slate-800';
+            'text-ink-2/40 dark:text-slate-600 bg-transparent border border-dashed border-rule dark:border-rule-dark';
         calBadgeClass = badgeClass;
     } else if (doctors.includes(docName)) {
         badgeClass = DOC_COLOR(docName);
@@ -3090,7 +3378,7 @@ function updateTargetedCellDOM(day, slotIndex) {
     // 1. Update Table View Button
     const btnTable = document.getElementById(`btn-day-${day}-slot-${slotIndex}`);
     if (btnTable) {
-        btnTable.className = `w-full text-left text-sm px-2.5 py-1.5 rounded-lg ${badgeClass} flex justify-between items-center transition-all hover:scale-[1.02] shadow-sm cursor-grab active:cursor-grabbing`;
+        btnTable.className = `w-full text-left text-sm px-2.5 py-1.5 rounded-[3px] ${badgeClass} flex justify-between items-center transition-colors cursor-grab active:cursor-grabbing`;
         btnTable.setAttribute('aria-label', cellAria(day, slotIndex, displayDoc));
         const span = btnTable.querySelector('span.truncate');
         if (span) span.innerText = displayDoc;
@@ -3099,7 +3387,7 @@ function updateTargetedCellDOM(day, slotIndex) {
     // 2. Update Calendar View Button
     const btnCal = document.getElementById(`btn-cal-day-${day}-slot-${slotIndex}`);
     if (btnCal) {
-        btnCal.className = `w-full text-left text-[11px] px-2 py-1 rounded-lg ${calBadgeClass} flex justify-between items-center transition-all hover:scale-[1.02] shadow-sm cursor-grab active:cursor-grabbing`;
+        btnCal.className = `w-full text-left text-[11px] px-2.5 py-1 rounded-[3px] ${calBadgeClass} flex justify-between items-center transition-colors cursor-grab active:cursor-grabbing`;
         btnCal.setAttribute('aria-label', cellAria(day, slotIndex, displayDoc));
         const span = btnCal.querySelector('span.truncate');
         if (span) span.innerText = displayDoc;
@@ -3140,24 +3428,24 @@ function updateTargetedCellDOM(day, slotIndex) {
             // Table
             let badgeClassTable =
                 textClass && !row.isNoDuty
-                    ? 'bg-white/80 dark:bg-slate-800 border border-black/5 dark:border-slate-700 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400';
+                    ? 'bg-white dark:bg-night border border-rule dark:border-rule-dark'
+                    : 'bg-paper dark:bg-night border border-rule dark:border-rule-dark text-ink-2 dark:text-slate-400';
             if (
                 text.includes(translations[currentLang].noDutyNote) ||
                 text.includes(translations[currentLang].noDutyBadge)
             )
                 badgeClassTable =
-                    'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700';
+                    'bg-paper dark:bg-night text-ink-2 dark:text-slate-400 border border-rule dark:border-rule-dark';
             else if (text.startsWith('[ล็อคคิว') || text.startsWith('[Locked'))
                 badgeClassTable =
-                    'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900';
+                    'bg-duty/5 dark:bg-duty-bright/10 text-duty dark:text-duty-bright border border-duty/25 dark:border-duty-bright/30';
             else if (text.includes(SHORTAGE_MARKER) || text.includes('Shortage'))
                 badgeClassTable =
-                    'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900 animate-pulse';
+                    'bg-signal/5 dark:bg-signal-bright/10 text-signal dark:text-signal-bright border border-signal/30 dark:border-signal-bright/30';
             else if (text.includes('ขอพัก') || text.includes('Off'))
                 badgeClassTable =
-                    'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-900';
-            noteHtmlTable += `<span class="text-[11px] px-2.5 py-1 rounded-md font-semibold tracking-wide ${badgeClassTable}">${esc(text)}</span>`;
+                    'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900';
+            noteHtmlTable += `<span class="text-[10px] px-2 py-0.5 rounded-[3px] font-medium ${badgeClassTable}">${esc(text)}</span>`;
 
             // Calendar
             if (
@@ -3168,10 +3456,10 @@ function updateTargetedCellDOM(day, slotIndex) {
                 !text.includes(SHORTAGE_MARKER)
             ) {
                 let badgeStyleCal =
-                    'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[8px] px-1 py-0.5 rounded';
+                    'bg-paper dark:bg-night text-ink-2 dark:text-slate-400 text-[8px] px-1 py-0.5 rounded-[2px]';
                 if (text.startsWith('[ล็อคคิว') || text.startsWith('[Locked')) {
                     badgeStyleCal =
-                        'bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 text-[8px] px-1 py-0.5 rounded font-bold';
+                        'bg-duty/5 dark:bg-duty-bright/10 border border-duty/25 dark:border-duty-bright/30 text-duty dark:text-duty-bright text-[8px] px-1 py-0.5 rounded-[2px] font-medium';
                 }
                 noteHtmlCal += `<span class="${badgeStyleCal} truncate block max-w-full" title="${esc(text)}">${esc(text)}</span>`;
             }
@@ -3200,6 +3488,38 @@ window.updateDoctorAssignment = function (day, slotIndex, docIndex) {
     }
     if (!newDoctor) return;
     const config = resultConfig();
+
+    // A manual edit may not drop a doctor below the night floor.
+    const floor = config.minNightShifts || 0;
+    if (floor > 0) {
+        const isShift = !!config.isShiftBased;
+        const nightStart = (config.morningSlots || 0) + (config.afternoonSlots || 0);
+        if (!isShift || slotIndex >= nightStart) {
+            const prev = globalResult.schedule[day - 1].selectedDocs[slotIndex]?.name;
+            const counts = {};
+            globalResult.schedule.forEach((row) => {
+                row.selectedDocs.forEach((slot, idx) => {
+                    if (isShift && idx < nightStart) return;
+                    const name = slot && slot.name;
+                    if (name && name !== SHORTAGE_MARKER && name !== '-')
+                        counts[name] = (counts[name] || 0) + 1;
+                });
+            });
+            if (prev && prev !== newDoctor) counts[prev] = (counts[prev] || 0) - 1;
+            if (newDoctor !== SHORTAGE_MARKER && newDoctor !== '-')
+                counts[newDoctor] = (counts[newDoctor] || 0) + 1;
+            const broken = Object.keys(counts).filter((doc) => counts[doc] < floor);
+            if (broken.length > 0) {
+                showToast(
+                    currentLang === 'th'
+                        ? `แก้ไม่ได้: ${broken.join(', ')} จะต่ำกว่า ${floor} เวร`
+                        : `Cannot edit: ${broken.join(', ')} would fall below ${floor} shifts`,
+                    true
+                );
+                return;
+            }
+        }
+    }
 
     // We only push to stack if this was not part of an internal bulk operation like drag-and-drop
     // Drag-and-drop handles its own stack pushing.
@@ -3361,7 +3681,7 @@ window.explainSlotFailure = function (day, doc, config) {
                               : `${lookBack} days ago`;
                     const restMsg = translations[currentLang].offDutyPeriodExplainer.replace(
                         '{n}',
-                        offDutyPeriod
+                        offDutyPeriod - 1
                     );
                     reasons.push(
                         `${currentLang === 'th' ? 'อยู่เวร' : 'worked'} ${daysAgoStr} (${restMsg})`
@@ -3452,33 +3772,46 @@ function updateStatsDashboard() {
         });
     });
 
-    document.getElementById('statTotalDuties').innerText =
-        `${totalDuties} ${currentLang === 'th' ? 'เวร' : 'duties'}`;
+    document.getElementById('statTotalDuties').innerHTML =
+        `${totalDuties}<span class="ml-1 text-[12px] font-normal text-ink-2 dark:text-slate-400">${currentLang === 'th' ? 'เวร' : 'duties'}</span>`;
 
     const shortagesCard = document.getElementById('statShortagesCard');
-    const shortagesIconBg = document.getElementById('statShortagesIconBg');
-    const shortagesIcon = document.getElementById('statShortagesIcon');
     const shortagesText = document.getElementById('statShortages');
 
-    shortagesText.innerText = `${shortages} ${currentLang === 'th' ? 'วัน' : 'days'}`;
-    if (shortages > 0) {
-        shortagesCard.className =
-            'bg-red-50 border border-red-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex items-center gap-3 dark:bg-red-950/20 dark:border-red-900/40';
-        shortagesIconBg.className =
-            'bg-red-100 dark:bg-red-950/60 p-2.5 rounded-xl text-red-600 dark:text-red-400';
-        shortagesIcon.setAttribute('data-lucide', 'alert-circle');
-    } else {
-        shortagesCard.className =
-            'bg-white border border-slate-200/80 rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex items-center gap-3 dark:bg-slate-900 dark:border-slate-800';
-        shortagesIconBg.className =
-            'bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400';
-        shortagesIcon.setAttribute('data-lucide', 'check-circle');
-    }
+    shortagesText.innerHTML = `${shortages}<span class="ml-1 text-[12px] font-normal text-ink-2 dark:text-slate-400">${currentLang === 'th' ? 'วัน' : 'days'}</span>`;
+    shortagesText.className =
+        'mt-1.5 text-[24px] leading-none font-semibold tracking-tight ' +
+        (shortages > 0 ? 'text-signal dark:text-signal-bright' : 'text-ink dark:text-slate-100');
+    shortagesCard.className =
+        'px-3 py-3 sm:px-5 sm:py-4 transition-colors' +
+        (shortages > 0 ? ' bg-signal/5 dark:bg-signal-bright/10' : '');
 
     const activeDocCount = globalResult.doctors.length;
     const avg = activeDocCount > 0 ? (totalDuties / activeDocCount).toFixed(1) : '0.0';
-    document.getElementById('statAvgDuties').innerText =
-        `${avg} ${currentLang === 'th' ? 'เวร/คน' : 'duties/doc'}`;
+    document.getElementById('statAvgDuties').innerHTML =
+        `${avg}<span class="ml-1 text-[12px] font-normal text-ink-2 dark:text-slate-400">${currentLang === 'th' ? 'เวร/คน' : 'duties/doc'}</span>`;
+
+    const printPeriod = document.getElementById('printPeriod');
+    if (printPeriod && globalResult) printPeriod.textContent = periodLabel(currentLang);
+
+    const floorPlanNote = document.getElementById('floorPlanNote');
+    if (floorPlanNote) {
+        const plan = globalResult && globalResult.config && globalResult.config.floorPlan;
+        const floor = globalResult && globalResult.config ? globalResult.config.minNightShifts : 0;
+        if (plan && floor > 0) {
+            const perDoctor =
+                globalResult.doctors.length > 0
+                    ? Math.round(plan.required / globalResult.doctors.length)
+                    : floor;
+            floorPlanNote.textContent =
+                currentLang === 'th'
+                    ? `แผน: ${plan.baseSlots} ช่อง + ${plan.extrasNeeded} แพทย์เสริม = ${plan.baseSlots + plan.extrasNeeded} เวร → ${perDoctor} เวร/คน`
+                    : `Plan: ${plan.baseSlots} slots + ${plan.extrasNeeded} extras = ${plan.baseSlots + plan.extrasNeeded} shifts → ${perDoctor} each`;
+            floorPlanNote.classList.remove('hidden');
+        } else {
+            floorPlanNote.classList.add('hidden');
+        }
+    }
 
     syncUndoBtn();
 
@@ -3507,23 +3840,23 @@ function renderSummaryTable(config) {
     if (sumHeader) {
         if (isShiftBased) {
             sumHeader.innerHTML = `
-                <tr class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[12px] rounded-t-lg">
-                    <th class="py-3 px-4 text-left font-bold rounded-tl-lg">${currentLang === 'th' ? 'แพทย์' : 'Doctor'}</th>
-                    <th class="py-3 px-4 font-bold text-teal-600 dark:text-teal-400">${currentLang === 'th' ? 'เช้า (M)' : 'Morning (M)'}</th>
-                    <th class="py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">${currentLang === 'th' ? 'บ่าย (A)' : 'Afternoon (A)'}</th>
-                    <th class="py-3 px-4 font-bold text-purple-600 dark:text-purple-400">${currentLang === 'th' ? 'ดึก (N)' : 'Night (N)'}</th>
-                    <th class="py-3 px-4 font-bold text-teal-700 dark:text-teal-400">${currentLang === 'th' ? 'ทำการ (จ-ศ)' : 'Weekday'}</th>
-                    <th class="py-3 px-4 font-bold text-orange-700 dark:text-orange-400">${currentLang === 'th' ? 'หยุด (ส-อา, พิเศษ)' : 'Weekend/Hol'}</th>
-                    <th class="py-3 px-4 font-bold bg-slate-200/60 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 rounded-tr-lg">${currentLang === 'th' ? 'รวมทั้งหมด' : 'Grand Total'}</th>
+                <tr class="text-ink-2 dark:text-slate-400 border-b border-rule dark:border-rule-dark text-[11px]">
+                    <th class="py-2.5 px-5 text-left font-medium">${currentLang === 'th' ? 'แพทย์' : 'Doctor'}</th>
+                    <th class="py-2.5 px-4 font-medium">${currentLang === 'th' ? 'เช้า (M)' : 'Morning (M)'}</th>
+                    <th class="py-2.5 px-4 font-medium">${currentLang === 'th' ? 'บ่าย (A)' : 'Afternoon (A)'}</th>
+                    <th class="py-2.5 px-4 font-medium">${currentLang === 'th' ? 'ดึก (N)' : 'Night (N)'}</th>
+                    <th class="py-2.5 px-4 font-medium text-duty dark:text-duty-bright">${currentLang === 'th' ? 'ทำการ (จ-ศ)' : 'Weekday'}</th>
+                    <th class="py-2.5 px-4 font-medium text-signal dark:text-signal-bright">${currentLang === 'th' ? 'หยุด (ส-อา, พิเศษ)' : 'Weekend/Hol'}</th>
+                    <th class="py-2.5 px-5 font-semibold text-ink dark:text-slate-200">${currentLang === 'th' ? 'รวมทั้งหมด' : 'Grand Total'}</th>
                 </tr>
             `;
         } else {
             sumHeader.innerHTML = `
-                <tr class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[12px] rounded-t-lg">
-                    <th class="py-3 px-4 text-left font-bold rounded-tl-lg">${currentLang === 'th' ? 'แพทย์' : 'Doctor'}</th>
-                    <th class="py-3 px-4 font-bold text-teal-700 dark:text-teal-400">${currentLang === 'th' ? 'ทำการ (จ-ศ)' : 'Weekday'}</th>
-                    <th class="py-3 px-4 font-bold text-orange-700 dark:text-orange-400">${currentLang === 'th' ? 'หยุด (ส-อา, พิเศษ)' : 'Weekend/Hol'}</th>
-                    <th class="py-3 px-4 font-bold bg-slate-200/60 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 rounded-tr-lg">${currentLang === 'th' ? 'รวมทั้งหมด' : 'Grand Total'}</th>
+                <tr class="text-ink-2 dark:text-slate-400 border-b border-rule dark:border-rule-dark text-[11px]">
+                    <th class="py-2.5 px-5 text-left font-medium">${currentLang === 'th' ? 'แพทย์' : 'Doctor'}</th>
+                    <th class="py-2.5 px-4 font-medium text-duty dark:text-duty-bright">${currentLang === 'th' ? 'ทำการ (จ-ศ)' : 'Weekday'}</th>
+                    <th class="py-2.5 px-4 font-medium text-signal dark:text-signal-bright">${currentLang === 'th' ? 'หยุด (ส-อา, พิเศษ)' : 'Weekend/Hol'}</th>
+                    <th class="py-2.5 px-5 font-semibold text-ink dark:text-slate-200">${currentLang === 'th' ? 'รวมทั้งหมด' : 'Grand Total'}</th>
                 </tr>
             `;
         }
@@ -3554,23 +3887,23 @@ function renderSummaryTable(config) {
 
         if (isShiftBased) {
             sumBody.innerHTML += `
-                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td class="py-3 px-6 text-left font-bold text-slate-700 dark:text-slate-200 flex items-center">${displayName}${quotaIndicator}</td>
-                    <td class="py-3 px-4 text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-slate-900/10 font-bold">${sum.morning || 0}</td>
-                    <td class="py-3 px-4 text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-slate-900/10 font-bold">${sum.afternoon || 0}</td>
-                    <td class="py-3 px-4 text-slate-600 dark:text-slate-400 bg-slate-50/20 dark:bg-slate-900/10 font-bold">${sum.night || 0}</td>
-                    <td class="py-3 px-4 text-teal-600 dark:text-teal-400 font-bold bg-teal-50/30 dark:bg-teal-950/20">${sum.workdays}</td>
-                    <td class="py-3 px-4 text-orange-600 dark:text-orange-400 font-bold bg-orange-50/30 dark:bg-orange-950/20">${sum.holidays}</td>
-                    <td class="py-3 px-4 font-bold text-slate-800 dark:text-slate-100 bg-slate-200/50 dark:bg-slate-800/80 text-[15px]">${sum.total}</td>
+                <tr class="hover:bg-paper/70 dark:hover:bg-night/50 transition-colors">
+                    <td class="py-2.5 px-5 text-left flex items-center gap-2"><span class="${DOC_COLOR(sum.name)}">${displayName}</span>${quotaIndicator}</td>
+                    <td class="py-2.5 px-4 text-ink-2 dark:text-slate-400">${sum.morning || 0}</td>
+                    <td class="py-2.5 px-4 text-ink-2 dark:text-slate-400">${sum.afternoon || 0}</td>
+                    <td class="py-2.5 px-4 text-ink-2 dark:text-slate-400">${sum.night || 0}</td>
+                    <td class="py-2.5 px-4 text-duty dark:text-duty-bright font-medium">${sum.workdays}</td>
+                    <td class="py-2.5 px-4 text-signal dark:text-signal-bright font-medium">${sum.holidays}</td>
+                    <td class="py-2.5 px-5 font-semibold text-ink dark:text-slate-100 text-[14px]">${sum.total}</td>
                 </tr>
             `;
         } else {
             sumBody.innerHTML += `
-                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td class="py-3 px-6 text-left font-bold text-slate-700 dark:text-slate-200 flex items-center">${displayName}${quotaIndicator}</td>
-                    <td class="py-3 px-4 text-teal-600 dark:text-teal-400 font-bold bg-teal-50/30 dark:bg-teal-950/20">${sum.workdays}</td>
-                    <td class="py-3 px-4 text-orange-600 dark:text-orange-400 font-bold bg-orange-50/30 dark:bg-orange-950/20">${sum.holidays}</td>
-                    <td class="py-3 px-4 font-bold text-slate-800 dark:text-slate-100 bg-slate-200/50 dark:bg-slate-800/80 text-[15px]">${sum.total}</td>
+                <tr class="hover:bg-paper/70 dark:hover:bg-night/50 transition-colors">
+                    <td class="py-2.5 px-5 text-left flex items-center gap-2"><span class="${DOC_COLOR(sum.name)}">${displayName}</span>${quotaIndicator}</td>
+                    <td class="py-2.5 px-4 text-duty dark:text-duty-bright font-medium">${sum.workdays}</td>
+                    <td class="py-2.5 px-4 text-signal dark:text-signal-bright font-medium">${sum.holidays}</td>
+                    <td class="py-2.5 px-5 font-semibold text-ink dark:text-slate-100 text-[14px]">${sum.total}</td>
                 </tr>
             `;
         }
@@ -3581,7 +3914,7 @@ function renderSummaryTable(config) {
     renderFairnessStrip(globalResult.summary);
 }
 
-// Compact per-doctor totals; the doctor(s) furthest from the mean get an amber ring
+// Compact per-doctor totals; the doctor(s) furthest from the mean get a red ring
 function renderFairnessStrip(summary) {
     const strip = document.getElementById('fairnessStrip');
     if (!strip) return;
@@ -3595,11 +3928,11 @@ function renderFairnessStrip(summary) {
     const chipsHtml = summary
         .map((s) => {
             const ring =
-                maxDev > 0 && Math.abs(s.total - mean) === maxDev ? ' ring-2 ring-amber-400' : '';
-            return `<span class="px-2.5 py-1 rounded-lg text-sm ${DOC_COLOR(s.name)}${ring}">${esc(s.name)} ${s.total}</span>`;
+                maxDev > 0 && Math.abs(s.total - mean) === maxDev ? ' ring-1 ring-signal/60' : '';
+            return `<span class="${DOC_COLOR(s.name)}${ring}">${esc(s.name)} ${s.total}</span>`;
         })
         .join('');
-    strip.innerHTML = `${chipsHtml}<span class="ml-auto text-xs font-bold text-slate-500 dark:text-slate-400">${esc(translations[currentLang].statsSpread)} ${Math.min(...totals)}–${Math.max(...totals)}</span>`;
+    strip.innerHTML = `${chipsHtml}<span class="ml-auto text-[11px] font-medium text-ink-2 dark:text-slate-400">${esc(translations[currentLang].statsSpread)} ${Math.min(...totals)}–${Math.max(...totals)}</span>`;
 }
 
 // Render Results Router (handles Table & Calendar view)
@@ -3621,10 +3954,10 @@ function renderResults() {
 
 // Render standard Table List View
 const roleColors = {
-    R1: 'text-violet-700 dark:text-violet-400',
-    R2: 'text-teal-700 dark:text-teal-400',
-    R3: 'text-indigo-700 dark:text-indigo-400',
-    Staff: 'text-emerald-700 dark:text-emerald-400',
+    R1: 'text-ink-2 dark:text-slate-400',
+    R2: 'text-ink-2 dark:text-slate-400',
+    R3: 'text-ink-2 dark:text-slate-400',
+    Staff: 'text-ink-2 dark:text-slate-400',
 };
 
 function getSlotRole(slotIdx) {
@@ -3653,24 +3986,18 @@ function getSlotRole(slotIdx) {
 }
 
 function getRoleBadgeColorClass(role) {
-    if (role === 'R1')
-        return 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-900';
-    if (role === 'R2')
-        return 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900';
-    if (role === 'R3')
-        return 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-900';
-    if (role === 'Staff')
-        return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900';
-    return 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+    if (['R1', 'R2', 'R3', 'Staff'].includes(role))
+        return 'text-ink-2 dark:text-slate-300 bg-paper dark:bg-night border-rule dark:border-rule-dark';
+    return 'text-ink-2 dark:text-slate-400 bg-paper dark:bg-night border-rule dark:border-rule-dark';
 }
 
 function renderTableView(config) {
     const { doctors } = globalResult;
     const headerRow = document.getElementById('scheduleTableHeader');
     let headerHtml = `
-        <tr class="text-slate-500 dark:text-slate-400 text-[13px]">
-            <th class="py-3.5 px-6 border-b border-slate-200 dark:border-slate-800 font-bold w-16 whitespace-nowrap">${translations[currentLang].tableDateCol}</th>
-            <th class="py-3.5 px-4 border-b border-slate-200 dark:border-slate-800 font-bold w-24 whitespace-nowrap">${translations[currentLang].tableDayCol}</th>
+        <tr class="text-ink-2 dark:text-slate-400 text-[11px]">
+            <th class="py-2.5 px-5 border-b border-rule dark:border-rule-dark font-medium w-16 whitespace-nowrap">${translations[currentLang].tableDateCol}</th>
+            <th class="py-2.5 px-4 border-b border-rule dark:border-rule-dark font-medium w-24 whitespace-nowrap">${translations[currentLang].tableDayCol}</th>
     `;
     const isShiftBased = config.isShiftBased;
     const M = config.morningSlots || 0;
@@ -3694,38 +4021,41 @@ function renderTableView(config) {
         } else if (isRoleBasedEnabled) {
             const role = getSlotRole(i - 1);
             if (role && role !== 'Default') {
-                const colorClass = roleColors[role] || 'text-slate-500 dark:text-slate-400';
-                subHeader = `<div class="text-[10px] font-bold mt-0.5 ${colorClass}">${role}</div>`;
+                const colorClass = roleColors[role] || 'text-ink-2 dark:text-slate-400';
+                subHeader = `<div class="text-[10px] font-medium mt-0.5 ${colorClass}">${role}</div>`;
             }
         }
         headerHtml += `
-            <th class="py-3.5 px-4 border-b border-slate-200 dark:border-slate-800 font-bold">
+            <th class="py-2.5 px-4 border-b border-rule dark:border-rule-dark font-medium">
                 <div>${headerTitle}</div>
                 ${subHeader}
             </th>
         `;
     }
-    headerHtml += `<th class="py-3.5 px-6 border-b border-slate-200 dark:border-slate-800 font-bold">${translations[currentLang].tableNoteCol}</th></tr>`;
+    headerHtml += `<th class="py-2.5 px-5 border-b border-rule dark:border-rule-dark font-medium">${translations[currentLang].tableNoteCol}</th></tr>`;
     headerRow.innerHTML = headerHtml;
 
     const schedBody = document.getElementById('scheduleTableBody');
     schedBody.innerHTML = '';
 
     globalResult.schedule.forEach((row) => {
-        let rowClass = 'hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors';
-        let textClass = 'font-medium text-slate-600 dark:text-slate-300';
+        let rowClass = 'hover:bg-paper/70 dark:hover:bg-night/50 transition-colors';
+        let textClass = 'font-medium text-ink dark:text-slate-200';
+        let edgeClass = '';
 
         if (row.isNoDuty) {
-            rowClass = 'bg-slate-100 dark:bg-slate-800/30 opacity-70';
-            textClass = 'font-medium text-slate-400 dark:text-slate-500';
+            rowClass = 'bg-paper dark:bg-night/40 opacity-60';
+            textClass = 'font-medium text-ink-2/70 dark:text-slate-500';
         } else if (row.isSpecial) {
             rowClass =
-                'bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100/80 dark:hover:bg-orange-950/35';
-            textClass = 'font-medium text-orange-800 dark:text-orange-300';
+                'bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-50/70 dark:hover:bg-amber-950/20';
+            textClass = 'font-medium text-amber-900 dark:text-amber-200';
+            edgeClass = 'weekend-edge';
         } else if (row.isHoliday) {
             rowClass =
-                'bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/80 dark:hover:bg-rose-950/35';
-            textClass = 'font-medium text-rose-800 dark:text-rose-300';
+                'bg-signal/5 dark:bg-signal-bright/5 hover:bg-signal/10 dark:hover:bg-signal-bright/10';
+            textClass = 'font-medium text-ink dark:text-slate-100';
+            edgeClass = 'weekend-edge';
         }
 
         let noteHtml = '';
@@ -3737,43 +4067,49 @@ function renderTableView(config) {
                 if (!text) return;
                 let badgeClass =
                     textClass && !row.isNoDuty
-                        ? 'bg-white/80 dark:bg-slate-800 border border-black/5 dark:border-slate-700 shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400';
+                        ? 'bg-white dark:bg-night border border-rule dark:border-rule-dark'
+                        : 'bg-paper dark:bg-night border border-rule dark:border-rule-dark text-ink-2 dark:text-slate-400';
                 if (
                     text.includes(translations[currentLang].noDutyNote) ||
                     text.includes(translations[currentLang].noDutyBadge)
                 )
                     badgeClass =
-                        'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700';
+                        'bg-paper dark:bg-night text-ink-2 dark:text-slate-400 border border-rule dark:border-rule-dark';
                 else if (text.startsWith('[ล็อคคิว') || text.startsWith('[Locked'))
                     badgeClass =
-                        'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900';
+                        'bg-duty/5 dark:bg-duty-bright/10 text-duty dark:text-duty-bright border border-duty/25 dark:border-duty-bright/30';
                 else if (text.includes(SHORTAGE_MARKER) || text.includes('Shortage'))
                     badgeClass =
-                        'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900 animate-pulse';
+                        'bg-signal/5 dark:bg-signal-bright/10 text-signal dark:text-signal-bright border border-signal/30 dark:border-signal-bright/30';
                 else if (text.includes('ขอพัก') || text.includes('Off'))
                     badgeClass =
-                        'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-900';
-                noteHtml += `<span class="text-[11px] px-2.5 py-1 rounded-md font-semibold tracking-wide ${badgeClass}">${esc(text)}</span>`;
+                        'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900';
+                noteHtml += `<span class="text-[10px] px-2 py-0.5 rounded-[3px] font-medium ${badgeClass}">${esc(text)}</span>`;
             });
             noteHtml += '</div>';
         }
 
         let displayDay = row.dayDisplay || row.day;
-        let colsHtml = `<td class="py-3.5 px-6 whitespace-nowrap ${textClass}">${displayDay}</td><td class="py-3.5 px-4 whitespace-nowrap ${textClass}">${row.dayName}</td>`;
+        let colsHtml = `<td class="py-2.5 px-5 whitespace-nowrap font-semibold text-ink dark:text-slate-100 ${edgeClass}">${displayDay}</td><td class="py-2.5 px-4 whitespace-nowrap text-ink-2 dark:text-slate-400 text-[12px]">${row.dayName}</td>`;
         for (let i = 0; i < globalResult.maxSlots; i++) {
+            // Days without a planned extra have fewer slots than maxSlots; leave those cells empty
+            // instead of showing them as an unfilled "Open" duty.
+            if (i >= row.selectedDocs.length) {
+                colsHtml += `<td class="py-2.5 px-4"></td>`;
+                continue;
+            }
             let docObj = row.selectedDocs[i];
             let d = docObj ? docObj.name : '';
             let dRole = docObj ? docObj.role : 'Default';
             let badgeClass =
-                'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
+                'bg-white dark:bg-night border border-rule dark:border-rule-dark text-ink-2 dark:text-slate-300';
 
             if (d === SHORTAGE_MARKER && !row.isNoDuty) {
                 badgeClass =
-                    'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-bold';
+                    'bg-signal/5 dark:bg-signal-bright/10 border border-signal/30 dark:border-signal-bright/30 text-signal dark:text-signal-bright font-medium';
             } else if (d === '-' || d === '' || row.isNoDuty) {
                 badgeClass =
-                    'text-slate-300 dark:text-slate-600 bg-transparent border-dashed border-slate-200 dark:border-slate-800';
+                    'text-ink-2/40 dark:text-slate-600 bg-transparent border border-dashed border-rule dark:border-rule-dark';
             } else if (doctors.includes(d)) {
                 badgeClass = DOC_COLOR(d);
             }
@@ -3788,22 +4124,22 @@ function renderTableView(config) {
             }
 
             if (row.isNoDuty) {
-                colsHtml += `<td class="py-3.5 px-4 text-slate-300 dark:text-slate-700 font-medium">-</td>`;
+                colsHtml += `<td class="py-2.5 px-4 text-ink-2/40 dark:text-slate-700 font-medium">-</td>`;
             } else {
                 let docIndexToPass = -2;
                 if (d === SHORTAGE_MARKER) docIndexToPass = -1;
                 else if (doctors.includes(d)) docIndexToPass = doctors.indexOf(d);
 
                 colsHtml += `
-                    <td class="py-3.5 px-4">
+                    <td class="py-2.5 px-4">
                         <div class="relative group/cell inline-block min-w-[110px]">
-                            <button id="btn-day-${row.day}-slot-${i}" aria-label="${cellAria(row.day, i, displayDoc)}" 
+                            <button id="btn-day-${row.day}-slot-${i}" aria-label="${cellAria(row.day, i, displayDoc)}"
                                 draggable="true" ondragstart="handleDragStart(event, ${row.day}, ${i}, ${docIndexToPass})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, ${row.day}, ${i}, ${docIndexToPass})"
-                                onclick="openCellDropdown(event, 'tablecelldropdown-${row.day}-${i}')" class="w-full text-left text-sm px-2.5 py-1.5 rounded-lg ${badgeClass} flex justify-between items-center transition-all hover:scale-[1.02] shadow-sm cursor-grab active:cursor-grabbing">
+                                onclick="openCellDropdown(event, 'tablecelldropdown-${row.day}-${i}')" class="w-full text-left text-sm px-2.5 py-1.5 rounded-[3px] ${badgeClass} flex justify-between items-center transition-colors cursor-grab active:cursor-grabbing">
                                 <span class="truncate" aria-hidden="true">${displayDoc}</span>
                                 <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 opacity-0 group-hover/cell:opacity-60 transition-opacity"><path d="m6 9 6 6 6-6"/></svg>
                             </button>
-                            <div id="tablecelldropdown-${row.day}-${i}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-20 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
+                            <div id="tablecelldropdown-${row.day}-${i}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-40 bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-md shadow-lg z-20 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
                                 ${getCellDropdownOptionsHtml(row.day, i, d, config)}
                             </div>
                         </div>
@@ -3811,7 +4147,7 @@ function renderTableView(config) {
                 `;
             }
         }
-        colsHtml += `<td id="note-day-${row.day}" class="py-3.5 px-6">${noteHtml}</td>`;
+        colsHtml += `<td id="note-day-${row.day}" class="py-2.5 px-5">${noteHtml}</td>`;
         schedBody.innerHTML += `<tr class="${rowClass}">${colsHtml}</tr>`;
     });
 }
@@ -3831,7 +4167,7 @@ function renderCalendarView(config) {
     for (let i = 0; i < startDayOfWeek; i++) {
         const emptyCell = document.createElement('div');
         emptyCell.className =
-            'hidden md:block bg-slate-100/40 dark:bg-slate-800/20 border border-slate-200/40 dark:border-slate-800 rounded-2xl min-h-[105px] opacity-40';
+            'hidden md:block bg-paper dark:bg-night border border-rule/60 dark:border-rule-dark rounded-[3px] min-h-[105px] opacity-40';
         grid.appendChild(emptyCell);
     }
 
@@ -3839,23 +4175,23 @@ function renderCalendarView(config) {
     globalResult.schedule.forEach((dayRow) => {
         const dayCell = document.createElement('div');
 
-        let cardBg = 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800';
-        let dateNumClass = 'text-slate-800 dark:text-slate-100 font-bold';
+        let cardBg = 'bg-white dark:bg-sheet-dark border-rule dark:border-rule-dark';
+        let dateNumClass = 'text-ink dark:text-slate-100 font-semibold';
 
         if (dayRow.isNoDuty) {
-            cardBg =
-                'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60';
-            dateNumClass = 'text-slate-400 dark:text-slate-600 font-bold';
+            cardBg = 'bg-paper dark:bg-night border-rule dark:border-rule-dark opacity-60';
+            dateNumClass = 'text-ink-2/60 dark:text-slate-600 font-semibold';
         } else if (dayRow.isSpecial) {
             cardBg =
-                'bg-orange-50/70 dark:bg-orange-950/20 border-orange-200/60 dark:border-orange-900/40';
-            dateNumClass = 'text-orange-700 dark:text-orange-400 font-bold';
+                'bg-amber-50/60 dark:bg-amber-950/10 border-amber-200/70 dark:border-amber-900/40';
+            dateNumClass = 'text-amber-900 dark:text-amber-200 font-semibold';
         } else if (dayRow.isHoliday) {
-            cardBg = 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-900/40';
-            dateNumClass = 'text-rose-700 dark:text-rose-400 font-bold';
+            cardBg =
+                'bg-signal/5 dark:bg-signal-bright/5 border-signal/25 dark:border-signal-bright/25';
+            dateNumClass = 'text-ink dark:text-slate-100 font-semibold';
         }
 
-        dayCell.className = `border rounded-2xl p-2.5 min-h-[110px] flex flex-col gap-1.5 transition-all hover:shadow-md ${cardBg}`;
+        dayCell.className = `border rounded-[3px] p-2.5 min-h-[110px] flex flex-col gap-1.5 transition-colors ${cardBg}`;
 
         let displayDateNum = dayRow.day;
         let monthLabel = '';
@@ -3868,28 +4204,28 @@ function renderCalendarView(config) {
         }
 
         let dayHeaderHtml = `
-            <div class="flex justify-between items-center border-b border-black/5 dark:border-white/5 pb-1">
-                <span class="text-sm ${dateNumClass}">${displayDateNum}${monthLabel}</span>
-                <span class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">${dayRow.dayName.substring(0, 3)}</span>
+            <div class="flex justify-between items-center border-b border-rule/70 dark:border-rule-dark pb-1">
+                <span class="text-[13px] ${dateNumClass}">${displayDateNum}${monthLabel}</span>
+                <span class="text-[10px] text-ink-2/70 dark:text-slate-500 font-medium">${dayRow.dayName.substring(0, 3)}</span>
             </div>
         `;
 
         let docsHtml = '<div class="flex flex-col gap-1 flex-1 justify-start pt-0.5">';
         if (dayRow.isNoDuty) {
-            docsHtml += `<span class="text-[10px] text-center font-bold text-slate-400 dark:text-slate-500 py-1.5 bg-slate-200/30 dark:bg-slate-800/40 rounded-lg">${translations[currentLang].noDutyBadge}</span>`;
+            docsHtml += `<span class="text-[10px] text-center font-medium text-ink-2/70 dark:text-slate-500 py-1.5 bg-paper dark:bg-night rounded-[3px]">${translations[currentLang].noDutyBadge}</span>`;
         } else {
             for (let i = 0; i < dayRow.slots; i++) {
                 const docObj = dayRow.selectedDocs[i];
                 const doc = docObj ? docObj.name : '';
                 const dRole = docObj ? docObj.role : 'Default';
                 let badgeClass =
-                    'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
+                    'bg-white dark:bg-night border border-rule dark:border-rule-dark text-ink-2 dark:text-slate-300';
                 if (doc === SHORTAGE_MARKER) {
                     badgeClass =
-                        'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-bold animate-pulse';
+                        'bg-signal/5 dark:bg-signal-bright/10 border border-signal/30 dark:border-signal-bright/30 text-signal dark:text-signal-bright font-medium';
                 } else if (doc === '-' || doc === '') {
                     badgeClass =
-                        'text-slate-300 dark:text-slate-600 bg-transparent border-dashed border-slate-200 dark:border-slate-800';
+                        'text-ink-2/40 dark:text-slate-600 bg-transparent border border-dashed border-rule dark:border-rule-dark';
                 } else if (doctors.includes(doc)) {
                     badgeClass = DOC_COLOR(doc);
                 }
@@ -3924,11 +4260,11 @@ function renderCalendarView(config) {
                     <div class="relative group/cell">
                         <button id="btn-cal-day-${dayRow.day}-slot-${i}" aria-label="${cellAria(dayRow.day, i, displayDoc)}" 
                             draggable="true" ondragstart="handleDragStart(event, ${dayRow.day}, ${i}, ${docIndexToPass})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, ${dayRow.day}, ${i}, ${docIndexToPass})"
-                            onclick="openCellDropdown(event, 'celldropdown-${dayRow.day}-${i}')" class="w-full text-left text-[11px] px-2 py-1 rounded-lg ${badgeClass} flex justify-between items-center transition-all hover:scale-[1.02] shadow-sm cursor-grab active:cursor-grabbing">
+                            onclick="openCellDropdown(event, 'celldropdown-${dayRow.day}-${i}')" class="w-full text-left text-[11px] px-2.5 py-1 rounded-[3px] ${badgeClass} flex justify-between items-center transition-colors cursor-grab active:cursor-grabbing">
                             <span class="truncate" aria-hidden="true">${displayDoc}</span>
                             <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-60 transition-opacity"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
-                        <div id="celldropdown-${dayRow.day}-${i}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-36 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-20 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
+                        <div id="celldropdown-${dayRow.day}-${i}" onclick="event.stopPropagation()" class="absolute left-0 mt-1 w-36 bg-white dark:bg-sheet-dark border border-rule dark:border-rule-dark rounded-md shadow-xl z-20 py-1 hidden max-h-48 overflow-y-auto custom-scrollbar">
                             ${getCellDropdownOptionsHtml(dayRow.day, i, doc, config)}
                         </div>
                     </div>
@@ -3952,10 +4288,10 @@ function renderCalendarView(config) {
                     return; // Skip lengthy notes in calendar view grid
 
                 let badgeStyle =
-                    'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[8px] px-1 py-0.5 rounded';
+                    'bg-paper dark:bg-night text-ink-2 dark:text-slate-400 text-[8px] px-1 py-0.5 rounded-[2px]';
                 if (text.startsWith('[ล็อคคิว') || text.startsWith('[Locked')) {
                     badgeStyle =
-                        'bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 text-[8px] px-1 py-0.5 rounded font-bold';
+                        'bg-duty/5 dark:bg-duty-bright/10 border border-duty/25 dark:border-duty-bright/30 text-duty dark:text-duty-bright text-[8px] px-1 py-0.5 rounded-[2px] font-medium';
                 }
                 noteHtml += `<span class="${badgeStyle} truncate block max-w-full" title="${esc(text)}">${esc(text)}</span>`;
             });
@@ -3984,7 +4320,7 @@ function getCellDropdownOptionsHtml(day, slotIndex, currentDoc, config) {
 
     if (isOverridden) {
         optionsHtml += `
-            <button onclick="resetSlotToAuto(${day}, ${slotIndex})" class="${btnClassBase} bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-400 font-bold flex items-center gap-2 border-b border-indigo-100 dark:border-indigo-950/50">
+            <button onclick="resetSlotToAuto(${day}, ${slotIndex})" class="${btnClassBase} text-duty dark:text-duty-bright hover:bg-duty/5 dark:hover:bg-duty-bright/10 font-medium flex items-center gap-2 border-b border-rule dark:border-rule-dark">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> <span>${translations[currentLang].resetCellBtn || 'คืนค่าระบบคำนวณ'}</span>
             </button>
         `;
@@ -3993,12 +4329,12 @@ function getCellDropdownOptionsHtml(day, slotIndex, currentDoc, config) {
     doctors.forEach((doc, index) => {
         const isCurrent =
             doc === currentDoc
-                ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-bold border-l-4 border-teal-500'
-                : 'text-slate-700 dark:text-slate-300 font-medium';
+                ? 'bg-duty/10 dark:bg-duty-bright/10 text-duty dark:text-duty-bright font-medium border-l-2 border-duty'
+                : 'text-ink dark:text-slate-300 font-medium';
         const role = doctorRoles[doc] || 'Default';
         const displayName = role !== 'Default' ? `${doc} (${role})` : doc;
         optionsHtml += `
-            <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, ${index})" class="${btnClassBase} hover:bg-slate-100 dark:hover:bg-slate-800 ${isCurrent} border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, ${index})" class="${btnClassBase} hover:bg-paper dark:hover:bg-night ${isCurrent} border-b border-rule dark:border-rule-dark last:border-0">
                 ${esc(displayName)}
             </button>
         `;
@@ -4006,21 +4342,21 @@ function getCellDropdownOptionsHtml(day, slotIndex, currentDoc, config) {
 
     const isShortage =
         currentDoc === SHORTAGE_MARKER
-            ? 'bg-red-50 dark:bg-red-950/40 font-bold text-red-700 dark:text-red-400 border-l-4 border-red-500'
-            : 'text-red-600 dark:text-red-400 font-bold';
+            ? 'bg-signal/10 dark:bg-signal-bright/10 text-signal dark:text-signal-bright font-medium border-l-2 border-signal'
+            : 'text-signal dark:text-signal-bright font-medium';
     optionsHtml += `
-        <div class="border-t-4 border-slate-100 dark:border-slate-800 my-1"></div>
-        <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -1)" class="${btnClassBase} hover:bg-red-50 dark:hover:bg-red-900/50 ${isShortage} border-b border-slate-100 dark:border-slate-800">
+        <div class="border-t border-rule dark:border-rule-dark my-1"></div>
+        <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -1)" class="${btnClassBase} hover:bg-signal/5 ${isShortage} border-b border-rule dark:border-rule-dark">
             ⚠️ <span>${translations[currentLang].shortageSlot || 'ขาดคน'}</span>
         </button>
     `;
 
     const isNone =
         currentDoc === '-' || currentDoc === ''
-            ? 'bg-slate-50 dark:bg-slate-800 font-bold border-l-4 border-slate-400'
-            : 'text-slate-400 dark:text-slate-500 font-bold';
+            ? 'bg-paper dark:bg-night font-medium border-l-2 border-ink-2'
+            : 'text-ink-2/70 dark:text-slate-500 font-medium';
     optionsHtml += `
-        <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -2)" class="${btnClassBase} hover:bg-slate-100 dark:hover:bg-slate-800 ${isNone}">
+        <button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -2)" class="${btnClassBase} hover:bg-paper dark:hover:bg-night ${isNone}">
             <span>${translations[currentLang].emptySlot || '- ว่าง'}</span>
         </button>
     `;
@@ -4081,7 +4417,7 @@ window.openCellDropdown = function (event, dropdownId) {
 
         const isOverridden = manualOverrides[day] && manualOverrides[day][slotIndex] !== undefined;
         if (isOverridden) {
-            optionsHtml += `<button onclick="resetSlotToAuto(${day}, ${slotIndex}); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-lg border-b border-slate-100 dark:border-slate-800 text-left text-indigo-600 dark:text-indigo-400 font-bold transition-colors">${T.resetCellBtn}</button>`;
+            optionsHtml += `<button onclick="resetSlotToAuto(${day}, ${slotIndex}); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-[15px] border-b border-rule dark:border-rule-dark text-left text-duty dark:text-duty-bright font-medium transition-colors">${T.resetCellBtn}</button>`;
         }
 
         doctors.forEach((doc, index) => {
@@ -4091,11 +4427,11 @@ window.openCellDropdown = function (event, dropdownId) {
                     : 'text-slate-700 dark:text-slate-300';
             const role = doctorRoles[doc] || 'Default';
             const displayName = role !== 'Default' ? `${doc} (${role})` : doc;
-            optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, ${index}); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-lg border-b border-slate-100 dark:border-slate-800 text-left ${isCurrent} transition-colors">${esc(displayName)}</button>`;
+            optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, ${index}); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-[15px] border-b border-rule dark:border-rule-dark text-left ${isCurrent} transition-colors">${esc(displayName)}</button>`;
         });
 
-        optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -1); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-lg border-b border-slate-100 dark:border-slate-800 text-left text-red-600 dark:text-red-400 font-bold transition-colors">${T.shortageSlot}</button>`;
-        optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -2); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-lg border-b border-slate-100 dark:border-slate-800 text-left text-slate-400 dark:text-slate-500 font-bold transition-colors">${T.emptySlot}</button>`;
+        optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -1); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-[15px] border-b border-rule dark:border-rule-dark text-left text-signal dark:text-signal-bright font-medium transition-colors">${T.shortageSlot}</button>`;
+        optionsHtml += `<button onclick="updateDoctorAssignment(${day}, ${slotIndex}, -2); closeMobileSheet();" class="w-full min-h-[48px] py-3 text-[15px] border-b border-rule dark:border-rule-dark text-left text-ink-2/70 dark:text-slate-500 font-medium transition-colors">${T.emptySlot}</button>`;
 
         listContainer.innerHTML = optionsHtml;
         const sheet = document.getElementById('mobileDoctorSheet');
@@ -4661,6 +4997,7 @@ function getCurrentConfig() {
         doctors: doctors,
         offData: offData,
         extraSlotsData: extraSlotsData,
+        configVersion: 2,
         manualOverrides: manualOverrides,
         quota: quota,
         inputs: {
@@ -4679,7 +5016,8 @@ function getCurrentConfig() {
             inputSpecialDays: document.getElementById('inputSpecialDays')?.value || '',
             inputSpecialDocs: document.getElementById('inputSpecialDocs')?.value || '',
             inputSpecialStartDay: document.getElementById('inputSpecialStartDay')?.value || '1',
-            inputOffDutyPeriod: document.getElementById('inputOffDutyPeriod')?.value || '2',
+            inputOffDutyPeriod: document.getElementById('inputOffDutyPeriod')?.value || '1',
+            inputMinNightShifts: document.getElementById('inputMinNightShifts')?.value || '0',
             lockConditionType: document.getElementById('lockConditionType')?.value || 'firstNDays',
             selectLockWeekday: document.getElementById('selectLockWeekday')?.value || '0',
             selectAlternateStrength:
@@ -4697,6 +5035,8 @@ function getCurrentConfig() {
             chkUseSpecialRule: document.getElementById('chkUseSpecialRule')?.checked || false,
             chkSoftAlternate: document.getElementById('chkSoftAlternate')?.checked ?? true,
             chkShiftBased: document.getElementById('chkShiftBased')?.checked || false,
+            chkAllowExtraNightDoctor:
+                document.getElementById('chkAllowExtraNightDoctor')?.checked ?? true,
         },
     };
 }
@@ -4882,10 +5222,34 @@ function applyConfig(config) {
         (!config.inputs || !Object.hasOwn(config.inputs, 'inputOffDutyPeriod'))
     ) {
         if (config.checkboxes && Object.hasOwn(config.checkboxes, 'chkPreventConsecutive')) {
-            offDutyPeriodEl.value = config.checkboxes.chkPreventConsecutive ? '2' : '1';
+            offDutyPeriodEl.value = config.checkboxes.chkPreventConsecutive ? '1' : '0';
         } else {
-            offDutyPeriodEl.value = '2';
+            offDutyPeriodEl.value = '1';
         }
+    }
+
+    // Migrate old 1-based offDutyPeriod configs to the 0-based UI value
+    const cfgVersion = Number(config.configVersion) || 1;
+    if (
+        cfgVersion < 2 &&
+        offDutyPeriodEl &&
+        config.inputs &&
+        Object.hasOwn(config.inputs, 'inputOffDutyPeriod')
+    ) {
+        const oldVal = parseInt(config.inputs.inputOffDutyPeriod, 10);
+        if (Number.isFinite(oldVal)) offDutyPeriodEl.value = String(Math.max(0, oldVal - 1));
+    }
+
+    const minShiftsEl = document.getElementById('inputMinNightShifts');
+    if (minShiftsEl && (!config.inputs || !Object.hasOwn(config.inputs, 'inputMinNightShifts'))) {
+        minShiftsEl.value = '0';
+    }
+    const allowExtraEl = document.getElementById('chkAllowExtraNightDoctor');
+    if (
+        allowExtraEl &&
+        (!config.checkboxes || !Object.hasOwn(config.checkboxes, 'chkAllowExtraNightDoctor'))
+    ) {
+        allowExtraEl.checked = true;
     }
 
     // Set defaults for Soft Alternate if missing
@@ -5242,16 +5606,18 @@ function renderPersonCentricView(config) {
     const body = document.getElementById('personViewBody');
     if (!head || !body) return;
 
-    let headHtml = `<tr class="text-slate-500 dark:text-slate-400 text-[11px]"><th class="py-2 px-4 border-b border-r border-slate-200 dark:border-slate-800 font-bold sticky left-0 bg-white dark:bg-slate-900 z-10 min-w-[120px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-none">${translations[currentLang].tableHeaderDoctors || 'Doctor'}</th>`;
+    let headHtml = `<tr class="text-ink-2 dark:text-slate-400 text-[11px]"><th class="py-2 px-4 border-b border-r border-rule dark:border-rule-dark font-medium sticky left-0 bg-white dark:bg-sheet-dark z-10 min-w-[120px]">${translations[currentLang].tableHeaderDoctors || 'Doctor'}</th>`;
     for (let d = 1; d <= config.numDays; d++) {
         const dayRow = globalResult.schedule[d - 1];
         const dayName = dayRow ? dayRow.dayName.substring(0, 2) : '';
         const isHol = dayRow ? dayRow.isHoliday : false;
-        let dayClass = isHol ? 'text-rose-500 font-bold' : 'text-slate-500 dark:text-slate-400';
+        let dayClass = isHol
+            ? 'text-signal dark:text-signal-bright font-medium'
+            : 'text-ink-2 dark:text-slate-400';
 
         let displayDateNum = d;
         let monthLabel = '';
-        let borderClass = 'border-slate-200 dark:border-slate-800';
+        let borderClass = 'border-rule dark:border-rule-dark';
 
         if (isCustomDateRange && dates[d - 1]) {
             const dateObj = dates[d - 1];
@@ -5260,11 +5626,11 @@ function renderPersonCentricView(config) {
                 monthLabel = ` ${monthName(dateObj)}`;
             }
             if (displayDateNum === 1 && d > 1) {
-                borderClass = 'border-l-2 border-indigo-300 dark:border-indigo-700 ' + borderClass;
+                borderClass = 'border-l-2 border-duty/50 dark:border-duty-bright/50 ' + borderClass;
             }
         }
 
-        headHtml += `<th class="py-2 px-1 border-b ${borderClass} text-center w-8 min-w-[32px] ${dayClass}"><div class="text-[10px] font-bold">${dayName}</div><div class="text-xs font-black whitespace-nowrap">${displayDateNum}${monthLabel}</div></th>`;
+        headHtml += `<th class="py-2 px-1 border-b ${borderClass} text-center w-8 min-w-[32px] ${dayClass}"><div class="text-[10px] font-medium">${dayName}</div><div class="text-[11px] font-semibold whitespace-nowrap">${displayDateNum}${monthLabel}</div></th>`;
     }
     headHtml += `</tr>`;
     head.innerHTML = headHtml;
@@ -5293,24 +5659,23 @@ function renderPersonCentricView(config) {
             }
         }
 
-        let rowClass =
-            idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/20';
-        bodyHtml += `<tr class="${rowClass} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">`;
-        bodyHtml += `<td class="py-2 px-4 border-b border-r border-slate-200 dark:border-slate-800 font-bold sticky left-0 z-10 min-w-[120px] ${rowClass} ${isShortage ? 'text-red-500' : 'text-slate-800 dark:text-slate-200'} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-none">${esc(docName)}${badgeHtml}</td>`;
+        let rowClass = idx % 2 === 0 ? 'bg-white dark:bg-sheet-dark' : 'bg-paper dark:bg-night';
+        bodyHtml += `<tr class="${rowClass} hover:bg-duty/5 dark:hover:bg-duty-bright/5 transition-colors">`;
+        bodyHtml += `<td class="py-2 px-4 border-b border-r border-rule dark:border-rule-dark font-semibold sticky left-0 z-10 min-w-[120px] ${rowClass} ${isShortage ? 'text-signal dark:text-signal-bright' : 'text-ink dark:text-slate-200'}">${esc(docName)}${badgeHtml}</td>`;
 
         for (let d = 1; d <= config.numDays; d++) {
             const dayRow = globalResult.schedule[d - 1];
 
-            let borderClass = 'border-slate-200 dark:border-slate-800';
+            let borderClass = 'border-rule dark:border-rule-dark';
             if (isCustomDateRange && dates[d - 1]) {
                 if (dates[d - 1].getDate() === 1 && d > 1) {
                     borderClass =
-                        'border-l-2 border-indigo-300 dark:border-indigo-700 ' + borderClass;
+                        'border-l-2 border-duty/50 dark:border-duty-bright/50 ' + borderClass;
                 }
             }
 
             if (!dayRow || dayRow.isNoDuty) {
-                bodyHtml += `<td class="border-b ${borderClass} bg-slate-200/50 dark:bg-slate-800/40"></td>`;
+                bodyHtml += `<td class="border-b ${borderClass} bg-paper dark:bg-night"></td>`;
                 continue;
             }
 
@@ -5322,20 +5687,10 @@ function renderPersonCentricView(config) {
             let docIndexToPass = isShortage ? -1 : doctors.indexOf(doc);
 
             if (slotIndices.length > 0) {
-                let bgClass = 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400';
+                let bgClass = 'bg-duty/10 dark:bg-duty-bright/15 text-duty dark:text-duty-bright';
                 if (isShortage) {
-                    bgClass = 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400';
-                } else {
-                    const colors = [
-                        'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400',
-                        'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400',
-                        'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400',
-                        'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400',
-                        'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400',
-                        'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
-                        'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400',
-                    ];
-                    bgClass = colors[docIndexToPass % colors.length];
+                    bgClass =
+                        'bg-signal/10 dark:bg-signal-bright/15 text-signal dark:text-signal-bright';
                 }
 
                 let badgesHtml = slotIndices

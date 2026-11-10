@@ -3,7 +3,11 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const testsDir = path.join(__dirname, 'tests');
-const testFiles = fs.readdirSync(testsDir).filter((f) => f.endsWith('.test.js'));
+// Read directory order is kept, except the real-browser end-to-end suite, which runs last.
+const testFiles = fs
+    .readdirSync(testsDir)
+    .filter((f) => f.endsWith('.test.js'))
+    .sort((a, b) => Number(/e2e/i.test(a)) - Number(/e2e/i.test(b)));
 
 let allPassed = true;
 
