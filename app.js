@@ -479,6 +479,7 @@ window.toggleLanguage = function () {
     }
 
     applyTranslations();
+    renderRelaxations();
     showToast(currentLang === 'th' ? 'เปลี่ยนภาษาเป็นไทยแล้ว' : 'Language switched to English');
 };
 
@@ -2065,8 +2066,7 @@ function checkQuotaFeasibility(config) {
     return violations;
 }
 
-// Cascade level -> the rule that level gave up, and what each costs in scoreSchedule
-const RELAX_KIND = { 2: 'spacing', 3: 'conflict', 4: 'dayBeforeOff', 5: 'special' };
+// What each relaxed rule costs in scoreSchedule
 const RELAX_PENALTY = { conflict: 50000, dayBeforeOff: 5000, spacing: 1000, special: 1000 };
 
 // Single trial of greedy scheduling with added randomness
@@ -2459,21 +2459,45 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         sortDoctors(availableDocs, isHoliday, day);
                         const chosenDoc = availableDocs[0];
                         if (level > 1) {
-                            const kind = RELAX_KIND[level];
-                            relaxations.push({
-                                day,
-                                slot: i,
-                                level,
-                                kind,
-                                doctors:
-                                    kind === 'conflict'
-                                        ? [
-                                              chosenDoc,
-                                              ...chosenToday.filter((o) =>
-                                                  areConflicting(chosenDoc, o)
-                                              ),
-                                          ]
-                                        : [chosenDoc],
+                            // Record every rule the chosen doctor really breaks, not just the level's label
+                            const clashing = chosenToday.filter((o) =>
+                                areConflicting(chosenDoc, o)
+                            );
+                            const spacingBroken =
+                                Array.from({ length: Math.max(0, offDutyPeriod - 1) }, (_, k) =>
+                                    (scheduleMap[day - k - 1] || []).includes(chosenDoc)
+                                ).some(Boolean) ||
+                                (isHoliday &&
+                                    holidaySet.has(day - 1) &&
+                                    (scheduleMap[day - 1] || []).includes(chosenDoc));
+                            const specialBroken =
+                                chosenSpecial &&
+                                specialDocs.includes(chosenDoc) &&
+                                chosenDoc !== chosenSpecial;
+                            const violated = {
+                                spacing: spacingBroken ? [chosenDoc] : null,
+                                conflict: clashing.length ? [chosenDoc, ...clashing] : null,
+                                dayBeforeOff:
+                                    !offToday.has(chosenDoc) && isBlockedByOffRequest(chosenDoc, i)
+                                        ? [chosenDoc]
+                                        : null,
+                                special: specialBroken ? [chosenDoc] : null,
+                            };
+                            const levelOf = {
+                                spacing: 2,
+                                conflict: 3,
+                                dayBeforeOff: 4,
+                                special: 5,
+                            };
+                            Object.entries(violated).forEach(([kind, docs]) => {
+                                if (docs)
+                                    relaxations.push({
+                                        day,
+                                        slot: i,
+                                        level: levelOf[kind],
+                                        kind,
+                                        doctors: docs,
+                                    });
                             });
                         }
                         selected.push(chosenDoc);
