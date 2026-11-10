@@ -1,0 +1,58 @@
+// Solver relaxation telemetry: recorded, scored, and surfaced in the results panel.
+const assert = require('assert');
+const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness');
+
+(async () => {
+    const w = await loadApp();
+    const { test, done } = runner('relaxationReport');
+    const panel = () => w.document.getElementById('relaxationPanel');
+    const generate = async () => {
+        w.toasts.length = 0;
+        await w.generateSchedule();
+        await settle(w);
+    };
+
+    await test('conflicting pair forced into one day is recorded, shown and counted', async () => {
+        // Two slots a day with only A and B: the pair must share days, so the conflict is relaxed.
+        reset(w, ['A', 'B']);
+        setInput(w, 'inputDefaultSlots', '2');
+        setInput(w, 'inputConflicts', 'A-B');
+        setInput(w, 'chkAllowBlankDays', false);
+        await generate();
+        const rel = snap(w, 'globalResult.relaxations');
+        assert.ok(rel.length > 0, 'relaxations recorded');
+        const c = rel.find((r) => r.kind === 'conflict');
+        assert.ok(c, 'a conflict relaxation exists');
+        assert.strictEqual(c.level, 3);
+        assert.ok(c.doctors.includes('A') || c.doctors.includes('B'));
+        assert.ok(!panel().classList.contains('hidden'), 'panel visible');
+        assert.ok(panel().textContent.includes(String(c.day)), 'panel names the day');
+        const ok = w.toasts.find((t) => /successfully/.test(t.msg));
+        assert.ok(ok && ok.msg.includes(String(rel.length)), JSON.stringify(w.toasts));
+    });
+
+    await test('clean run has no relaxations, hidden panel, no warning count', async () => {
+        reset(w);
+        await generate();
+        assert.strictEqual(snap(w, 'globalResult.relaxations.length'), 0);
+        assert.ok(panel().classList.contains('hidden'));
+        assert.ok(
+            w.toasts.every((t) => !/warning|คำเตือน/.test(t.msg)),
+            JSON.stringify(w.toasts)
+        );
+    });
+
+    await test('relaxations lower the score; conflict outweighs spacing', async () => {
+        const score = (rel) =>
+            w.eval(`scoreSchedule({schedule:[],tCounts:{A:0,B:0},hCounts:{A:0,B:0},wCounts:{A:0,B:0},
+                relaxations:${JSON.stringify(rel)}})`);
+        const r = (kind) => ({ day: 1, slot: 0, level: 2, kind, doctors: ['A'] });
+        const clean = score([]);
+        assert.strictEqual(clean - score([r('conflict')]), 50000);
+        assert.strictEqual(clean - score([r('dayBeforeOff')]), 5000);
+        assert.strictEqual(clean - score([r('spacing')]), 1000);
+        assert.strictEqual(clean - score([r('special')]), 1000);
+    });
+
+    done();
+})();

@@ -2065,6 +2065,10 @@ function checkQuotaFeasibility(config) {
     return violations;
 }
 
+// Cascade level -> the rule that level gave up, and what each costs in scoreSchedule
+const RELAX_KIND = { 2: 'spacing', 3: 'conflict', 4: 'dayBeforeOff', 5: 'special' };
+const RELAX_PENALTY = { conflict: 50000, dayBeforeOff: 5000, spacing: 1000, special: 1000 };
+
 // Single trial of greedy scheduling with added randomness
 function generateSingleScheduleCandidate(randomness = 0, config) {
     const {
@@ -2115,6 +2119,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
 
     const scheduleData = [];
     const scheduleMap = {};
+    const relaxations = [];
     let maxSlotsFound = 0;
 
     // Pre-calculate remaining quotas vs remaining slots for probabilistic blank spacing
@@ -2365,6 +2370,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         return true;
                     });
                     let availableDocs = [];
+                    let level = 1;
 
                     // Cascade Level 1: Strict Constraints (Ideal Case)
                     availableDocs = roleDocs.filter(
@@ -2376,6 +2382,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     // Must-Fill cascade: only runs when Allow Blank Days is OFF
                     if (availableDocs.length === 0 && !allowBlankDays) {
                         // Cascade Level 2: Relax spacing / consecutive rules
+                        level = 2;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
                             if (isBlockedByOffRequest(doc, i) || isBlockedByNightToMorning(doc, i))
@@ -2390,6 +2397,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
 
                     if (availableDocs.length === 0 && !allowBlankDays) {
                         // Cascade Level 3: Relax conflict rules
+                        level = 3;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
                             if (isBlockedByOffRequest(doc, i) || isBlockedByNightToMorning(doc, i))
@@ -2402,6 +2410,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
 
                     if (availableDocs.length === 0 && !allowBlankDays) {
                         // Cascade Level 4: Relax Off Requests
+                        level = 4;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
                             if (offToday.has(doc) || isBlockedByNightToMorning(doc, i))
@@ -2414,6 +2423,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
 
                     if (availableDocs.length === 0 && !allowBlankDays) {
                         // Cascade Level 5: Absolute fallback (Any doctor with matching role, but not already working today)
+                        level = 5;
                         availableDocs = roleDocs.filter(
                             (doc) =>
                                 !chosenToday.includes(doc) &&
@@ -2448,6 +2458,24 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     if (availableDocs.length > 0) {
                         sortDoctors(availableDocs, isHoliday, day);
                         const chosenDoc = availableDocs[0];
+                        if (level > 1) {
+                            const kind = RELAX_KIND[level];
+                            relaxations.push({
+                                day,
+                                slot: i,
+                                level,
+                                kind,
+                                doctors:
+                                    kind === 'conflict'
+                                        ? [
+                                              chosenDoc,
+                                              ...chosenToday.filter((o) =>
+                                                  areConflicting(chosenDoc, o)
+                                              ),
+                                          ]
+                                        : [chosenDoc],
+                            });
+                        }
                         selected.push(chosenDoc);
                         chosenToday.push(chosenDoc);
                         if (allowBlankDays && hasQuotas) {
@@ -2537,6 +2565,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         hCounts,
         tCounts,
         nCounts,
+        relaxations,
         maxSlots: maxSlotsFound,
         config: config,
     };
@@ -2570,6 +2599,11 @@ function scoreSchedule(candidate) {
         });
         score -= shortfall * 100000;
     }
+
+    // 1c. Every rule the cascade had to give up
+    (candidate.relaxations || []).forEach((r) => {
+        score -= RELAX_PENALTY[r.kind] || 0;
+    });
 
     // 2. Workload balance (Standard Deviation)
     const totals = Object.values(candidate.tCounts);
@@ -2976,6 +3010,7 @@ async function runScheduleOnce() {
             schedule: JSON.parse(JSON.stringify(bestCandidate.schedule)),
             originalSchedule: JSON.parse(JSON.stringify(bestCandidate.schedule)),
             summary: bestCandidate.summary,
+            relaxations: JSON.parse(JSON.stringify(bestCandidate.relaxations || [])),
             maxSlots: bestCandidate.maxSlots,
             ...snapshot,
         };
@@ -3022,10 +3057,11 @@ async function runScheduleOnce() {
                 true
             );
         } else {
+            const n = globalResult.relaxations.length;
             showToast(
                 currentLang === 'th'
-                    ? 'จัดตารางเวรด้วย Smart Solver สำเร็จ!'
-                    : 'Schedule calculated successfully with Smart Solver!'
+                    ? `จัดตารางเวรด้วย Smart Solver สำเร็จ!${n ? ` (คำเตือน ${n} รายการ)` : ''}`
+                    : `Schedule calculated successfully with Smart Solver!${n ? ` (${n} warnings)` : ''}`
             );
         }
     } catch (error) {
@@ -3936,12 +3972,40 @@ function renderFairnessStrip(summary) {
 }
 
 // Render Results Router (handles Table & Calendar view)
+// Lists the rules the solver had to give up, one line per day; hidden when it gave up none
+function renderRelaxations() {
+    const el = document.getElementById('relaxationPanel');
+    if (!el) return;
+    const rel = (globalResult && globalResult.relaxations) || [];
+    el.classList.toggle('hidden', rel.length === 0);
+    if (!rel.length) {
+        el.innerHTML = '';
+        return;
+    }
+    const t = translations[currentLang];
+    const byDay = new Map();
+    rel.forEach((r) => {
+        if (!byDay.has(r.day)) byDay.set(r.day, []);
+        byDay.get(r.day).push(r);
+    });
+    const lines = [...byDay].map(([day, rs]) => {
+        const row = globalResult.schedule[day - 1];
+        const label = (row && row.dayDisplay) || `${t.relaxDay} ${day}`;
+        const what = rs
+            .map((r) => `${t['relaxKind_' + r.kind]} (${r.doctors.map(esc).join(', ')})`)
+            .join('; ');
+        return `<li>${esc(label)}: ${what}</li>`;
+    });
+    el.innerHTML = `<p class="font-semibold">${esc(t.relaxTitle)} (${rel.length})</p><p class="mt-1 text-ink-2 dark:text-slate-400">${esc(t.relaxHint)}</p><ul class="mt-2 list-disc pl-5 space-y-0.5">${lines.join('')}</ul>`;
+}
+
 function renderResults() {
     if (!globalResult) return;
 
     const config = resultConfig();
     renderSummaryTable(config);
     renderCalendarScopeOptions(config);
+    renderRelaxations();
 
     if (viewMode === 'table') {
         renderTableView(config);
