@@ -52,11 +52,11 @@ const countDuties = (schedule) => {
 
     const setupShift = (doctors, opts = {}) => {
         reset(w, doctors);
-        setInput(w, 'inputMonth', '4');
+        setInput(w, 'inputMonth', String(opts.month || 4));
         setInput(w, 'inputYear', '2026');
         setInput(w, 'chkShiftBased', true);
-        setInput(w, 'inputMorningSlots', '0');
-        setInput(w, 'inputAfternoonSlots', '0');
+        setInput(w, 'inputMorningSlots', String(opts.morning || 0));
+        setInput(w, 'inputAfternoonSlots', String(opts.afternoon || 0));
         setInput(w, 'inputNightSlots', String(opts.nightSlots === undefined ? 2 : opts.nightSlots));
         setInput(w, 'inputMinNightShifts', String(opts.floor === undefined ? 14 : opts.floor));
         setInput(w, 'chkAllowExtraNightDoctor', opts.extra !== false);
@@ -162,6 +162,37 @@ const countDuties = (schedule) => {
             JSON.stringify(w.toasts)
         );
     });
+
+    for (const [n, floor] of [
+        [7, 5],
+        [6, 5],
+        [8, 5],
+        [5, 8],
+    ]) {
+        await test(`shift mode 1M/1A/1N: ${n} doctors, floor ${floor} (day slots leave below-floor doctors free for the night)`, async () => {
+            const names = 'ABCDEFGH'.slice(0, n).split('');
+            // 7 doctors, 31-day month, floor 5: morning/afternoon used to grab the low-night doctors
+            setupShift(names, {
+                month: 1,
+                morning: 1,
+                afternoon: 1,
+                nightSlots: 1,
+                floor,
+            });
+            const schedule = await run();
+            assert.ok(schedule, JSON.stringify(w.toasts));
+            const nights = {};
+            schedule.forEach((row) =>
+                row.selectedDocs.forEach((slot, i) => {
+                    if (i >= 2 && slot.name && slot.name !== '-' && slot.name !== 'SHORTAGE_MARKER')
+                        nights[slot.name] = (nights[slot.name] || 0) + 1;
+                })
+            );
+            names.forEach((d) =>
+                assert.ok((nights[d] || 0) >= floor, `${d} got ${nights[d] || 0}/${floor}`)
+            );
+        });
+    }
 
     await test('a manual edit cannot drop a doctor below the floor', async () => {
         setup(['A', 'B', 'C', 'D', 'E']);

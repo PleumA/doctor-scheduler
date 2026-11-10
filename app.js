@@ -2238,7 +2238,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
     }
 
     // Sort doctors by workload counters, with random perturbation for exploring alternatives
-    const sortDoctors = (docsList, isHol, currentDay) => {
+    const sortDoctors = (docsList, isHol, currentDay, slotIdx = 0) => {
         const noise = {};
         docsList.forEach((doc) => {
             noise[doc] = (rng() - 0.5) * randomness;
@@ -2253,8 +2253,14 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                 const bCount = countFor(b);
                 const aBelow = aCount < floor;
                 const bBelow = bCount < floor;
-                if (aBelow !== bBelow) return aBelow ? -1 : 1;
-                if (aCount !== bCount) return aCount - bCount;
+                if (isShiftBased && slotIdx < morningSlots + afternoonSlots) {
+                    // Day slot: keep below-floor doctors free for tonight's night slot
+                    if (aBelow !== bBelow) return aBelow ? 1 : -1;
+                    if (aCount !== bCount) return bCount - aCount;
+                } else {
+                    if (aBelow !== bBelow) return aBelow ? -1 : 1;
+                    if (aCount !== bCount) return aCount - bCount;
+                }
             }
 
             // Priority 1: Minimum Shift Quota Fulfillment
@@ -2548,7 +2554,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     }
 
                     if (availableDocs.length > 0) {
-                        sortDoctors(availableDocs, isHoliday, day);
+                        sortDoctors(availableDocs, isHoliday, day, i);
                         const chosenDoc = availableDocs[0];
                         if (level > 1) {
                             // Record every rule the chosen doctor really breaks, not just the level's label
