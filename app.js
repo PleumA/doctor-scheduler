@@ -3178,7 +3178,7 @@ async function runScheduleOnce() {
         pruneOverrides(globalResult.doctors);
 
         // Apply manual overrides saved previously
-        applyManualOverrides(config);
+        const droppedOverrides = applyManualOverrides(config);
         globalResult.carryOver = buildCarryOver(globalResult);
 
         renderResults();
@@ -3211,6 +3211,7 @@ async function runScheduleOnce() {
                     : `Schedule calculated successfully with Smart Solver!${n ? ` (${n} warnings)` : ''}`
             );
         }
+        toastDroppedOverrides(droppedOverrides);
     } catch (error) {
         console.error(error);
         const btn = document.getElementById('btnCalculate');
@@ -3296,20 +3297,34 @@ function applyManualOverrides(config) {
         });
     }
 
+    // Overrides were made against an older solver result (regenerate, import, undo): re-check the
+    // whole set against this one as a unit and drop the latest day / highest slot until it passes.
+    const applicable = [];
     Object.keys(manualOverrides).forEach((dayStr) => {
         const day = parseInt(dayStr);
         const dayRow = globalResult.schedule[day - 1];
         if (dayRow && !dayRow.isNoDuty) {
             Object.keys(manualOverrides[day]).forEach((slotStr) => {
                 const slotIndex = parseInt(slotStr);
-                if (slotIndex < dayRow.slots) {
-                    dayRow.selectedDocs[slotIndex] = {
-                        name: manualOverrides[day][slotIndex],
-                        role: dayRow.selectedDocs[slotIndex]?.role || 'Default',
-                    };
-                }
+                if (slotIndex < dayRow.slots)
+                    applicable.push({ day, slotIndex, doc: manualOverrides[day][slotIndex] });
             });
         }
+    });
+    applicable.sort((a, b) => a.day - b.day || a.slotIndex - b.slotIndex);
+    const dropped = [];
+    while (applicable.length > 0 && !validateEdits(config, applicable).ok) {
+        const bad = applicable.pop();
+        dropped.push(bad);
+        delete manualOverrides[bad.day][bad.slotIndex];
+        if (Object.keys(manualOverrides[bad.day]).length === 0) delete manualOverrides[bad.day];
+    }
+    applicable.forEach(({ day, slotIndex, doc }) => {
+        const dayRow = globalResult.schedule[day - 1];
+        dayRow.selectedDocs[slotIndex] = {
+            name: doc,
+            role: dayRow.selectedDocs[slotIndex]?.role || 'Default',
+        };
     });
 
     // Notes depend on who is assigned, so refresh them all
@@ -3317,6 +3332,19 @@ function applyManualOverrides(config) {
 
     // Recalculate summary totals based on overrides
     recalculateCounts(config);
+    return dropped;
+}
+
+// One toast for overrides that no longer pass the rules after the schedule changed
+function toastDroppedOverrides(dropped) {
+    if (!dropped || dropped.length === 0) return;
+    const days = [...new Set(dropped.map((d) => d.day))].sort((a, b) => a - b).join(', ');
+    showToast(
+        currentLang === 'th'
+            ? `ยกเลิกการแก้ไขด้วยมือ ${dropped.length} รายการ (วันที่ ${days}) เพราะไม่ผ่านกฎของตารางใหม่`
+            : `Dropped ${dropped.length} manual edit(s) (day ${days}) that no longer pass the rules`,
+        true
+    );
 }
 
 // Toggle clear overrides
@@ -4051,6 +4079,18 @@ window.explainSlotFailure = function (day, doc, config) {
 
 // Reset overridden cell back to algorithm calculated value
 window.resetSlotToAuto = function (day, slotIndex) {
+    // The solver's pick may clash with neighbouring overrides now; same hard rules as any edit
+    const autoDoc =
+        globalResult &&
+        globalResult.originalSchedule &&
+        globalResult.originalSchedule[day - 1].selectedDocs[slotIndex];
+    if (autoDoc) {
+        const v = validateEdits(resultConfig(), [{ day, slotIndex, doc: autoDoc.name }]);
+        if (!v.ok) {
+            toastEditRejected(v);
+            return;
+        }
+    }
     pushToUndoStack();
     if (manualOverrides[day]) {
         delete manualOverrides[day][slotIndex];
@@ -5769,7 +5809,7 @@ window.undoLastAction = function () {
         // A doctor removed since the snapshot must not come back as a ghost
         pruneOverrides(resultCtx().doctors);
         const config = resultConfig();
-        applyManualOverrides(config);
+        const dropped = applyManualOverrides(config);
         renderTableView(config);
         renderCalendarView(config);
 
@@ -5780,7 +5820,8 @@ window.undoLastAction = function () {
         recalculateCounts(config);
         renderSummaryTable(config);
         updateStatsDashboard();
-        showToast(currentLang === 'th' ? 'เลิกทำ (Undo) สำเร็จ' : 'Undo successful');
+        if (dropped.length > 0) toastDroppedOverrides(dropped);
+        else showToast(currentLang === 'th' ? 'เลิกทำ (Undo) สำเร็จ' : 'Undo successful');
     } else {
         showToast(
             currentLang === 'th' ? 'ไม่มีการกระทำที่สามารถเลิกทำได้' : 'Nothing to undo',

@@ -66,6 +66,7 @@ function resetMocks() {
     mockDOM['inputMonth'] = { value: '1' };
     mockDOM['inputYear'] = { value: '2026' };
     mockDOM['inputDefaultSlots'] = { value: '2' };
+    mockDOM['inputOffDutyPeriod'] = { value: '0' }; // overrides are re-validated on each run; no rest window here
     mockDOM['chkAllowBlankDays'] = { checked: false };
     mockDOM['chkRoleBased'] = { checked: false };
     mockDOM['btnCalculate'] = { disabled: false, innerHTML: 'Calculate' };
@@ -118,7 +119,9 @@ const relax = () =>
         areConflicting: () => false,
     });
 const freeIdx = (day) =>
-    doctors.findIndex((d) => !globalResult.schedule[day - 1].selectedDocs.some((s) => s.name === d));
+    doctors.findIndex(
+        (d) => !globalResult.schedule[day - 1].selectedDocs.some((s) => s.name === d)
+    );
 
 async function runTests() {
     console.log('Running manualOverrides.test.js...');
@@ -147,7 +150,11 @@ async function runTests() {
         await global.generateSchedule();
 
         let newDoc = globalResult.schedule[4].selectedDocs[1].name;
-        assert.strictEqual(newDoc, doctors[free], 'Override must persist through schedule generation');
+        assert.strictEqual(
+            newDoc,
+            doctors[free],
+            'Override must persist through schedule generation'
+        );
 
         console.log('✅ TEST 1 PASSED: OVERRIDE SURVIVES RECALCULATION');
         passed++;
@@ -159,10 +166,14 @@ async function runTests() {
     try {
         resetMocks();
         doctors = ['A', 'B', 'C'];
-        manualOverrides = { 5: { 1: 'C' } };
+        manualOverrides = {};
 
         await global.generateSchedule();
-        assert.strictEqual(globalResult.schedule[4].selectedDocs[1].name, 'C');
+        // An override that is legal on the regenerated roster (overrides are re-validated per run)
+        const free = doctors[freeIdx(5)];
+        manualOverrides = { 5: { 1: free } };
+        await global.generateSchedule();
+        assert.strictEqual(globalResult.schedule[4].selectedDocs[1].name, free);
 
         // Reset override (simulating UI passing -1)
         global.resetSlotToAuto(5, 1);
@@ -326,7 +337,11 @@ async function runTests() {
 
         // Verify the slot now contains doctor A
         let overriddenDoc = globalResult.schedule[shortageDay - 1].selectedDocs[shortageSlot].name;
-        assert.strictEqual(overriddenDoc, doctors[freeDoc], 'Slot should now contain the free doctor');
+        assert.strictEqual(
+            overriddenDoc,
+            doctors[freeDoc],
+            'Slot should now contain the free doctor'
+        );
 
         // Count new shortages
         let newShortages = 0;

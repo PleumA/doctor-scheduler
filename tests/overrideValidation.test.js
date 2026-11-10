@@ -108,7 +108,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         expectReject(3, 0, x, 'holiday');
     });
 
-    await test('night to morning: last night\'s doctor cannot take the morning', async () => {
+    await test("night to morning: last night's doctor cannot take the morning", async () => {
         const s = await gen({
             gap: '0',
             inputs: [
@@ -193,6 +193,89 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         );
         assert.ok(w.toasts.some((t) => t.isError && t.msg.includes('(conflict)')));
         assert.deepStrictEqual(sched(), before);
+        assert.strictEqual(w.eval('undoStack.length'), undo);
+    });
+
+    // A free doctor the validator accepts at (day, slot 0)
+    const validPick = (day) => {
+        const cur = namesOf(sched()[day - 1])[0];
+        const doc = DOCS.find(
+            (d) => d !== cur && w.validateManualAssignment(w.eval('resultConfig()'), day, 0, d).ok
+        );
+        assert.ok(doc, `no valid doctor for day ${day}`);
+        return doc;
+    };
+    const regen = async () => {
+        w.toasts.length = 0;
+        await w.generateSchedule();
+        await settle(w);
+    };
+    const droppedToast = () =>
+        w.toasts.find((t) => t.isError && /Dropped 1|ยกเลิกการแก้ไข/.test(t.msg));
+
+    await test('F4: an override made invalid by a new off request is dropped on regenerate', async () => {
+        await gen({ gap: '0' });
+        const x = validPick(8);
+        w.updateDoctorAssignment(8, 0, idxOf(x));
+        assert.strictEqual(namesOf(sched()[7])[0], x);
+        w.eval(`offData = [{ id: 1, date: '8', names: '${x}' }]`);
+        await regen();
+        assert.deepStrictEqual(snap(w, 'manualOverrides'), {});
+        assert.ok(!namesOf(sched()[7]).includes(x), `${x} is on day 8 despite the off request`);
+        assert.ok(droppedToast(), JSON.stringify(w.toasts));
+        assert.ok(/day 8/.test(droppedToast().msg), droppedToast().msg);
+    });
+
+    await test('F4: a valid same-day swap survives a regenerate', async () => {
+        const s = await gen({ gap: '0' });
+        const [x, y] = namesOf(s[8]);
+        assert.ok(
+            w.applyPairedEdits([
+                { day: 9, slotIndex: 0, docIndex: idxOf(y) },
+                { day: 9, slotIndex: 1, docIndex: idxOf(x) },
+            ])
+        );
+        await regen();
+        assert.deepStrictEqual(namesOf(sched()[8]), [y, x]);
+        assert.deepStrictEqual(snap(w, 'manualOverrides'), { 9: { 0: y, 1: x } });
+        assert.ok(!droppedToast(), JSON.stringify(w.toasts));
+    });
+
+    await test('F4: undo is re-validated, an old snapshot cannot bring an invalid override back', async () => {
+        await gen({ gap: '0' });
+        const x = validPick(8);
+        w.updateDoctorAssignment(8, 0, idxOf(x));
+        const y = validPick(12);
+        w.updateDoctorAssignment(12, 0, idxOf(y)); // undo stack now holds the snapshot with only day 8
+        w.eval(`offData = [{ id: 1, date: '8', names: '${x}' }]`);
+        await regen();
+        w.toasts.length = 0;
+        w.undoLastAction(); // restores {8: x}, which is now illegal
+        assert.ok(!namesOf(sched()[7]).includes(x), 'invalid override came back through undo');
+        assert.strictEqual(snap(w, 'manualOverrides')[8], undefined);
+        assert.ok(droppedToast(), JSON.stringify(w.toasts));
+    });
+
+    await test('F5: reset of one half of a swap is rejected and changes nothing', async () => {
+        const s = await gen({ gap: '0' });
+        const [x, y] = namesOf(s[8]);
+        assert.ok(
+            w.applyPairedEdits([
+                { day: 9, slotIndex: 0, docIndex: idxOf(y) },
+                { day: 9, slotIndex: 1, docIndex: idxOf(x) },
+            ])
+        );
+        const before = sched();
+        const overrides = snap(w, 'manualOverrides');
+        const undo = w.eval('undoStack.length');
+        w.toasts.length = 0;
+        w.resetSlotToAuto(9, 0); // would put x back on slot 0 while slot 1 still holds x
+        assert.ok(
+            w.toasts.some((t) => t.isError),
+            JSON.stringify(w.toasts)
+        );
+        assert.deepStrictEqual(sched(), before);
+        assert.deepStrictEqual(snap(w, 'manualOverrides'), overrides);
         assert.strictEqual(w.eval('undoStack.length'), undo);
     });
 

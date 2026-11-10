@@ -1,6 +1,14 @@
 // Imported overrides and doctor-removal pruning apply only when a run commits.
 const assert = require('assert');
-const { loadApp, reset: baseReset, settle, setInput, snap, importJSON, runner } = require('./domHarness');
+const {
+    loadApp,
+    reset: baseReset,
+    settle,
+    setInput,
+    snap,
+    importJSON,
+    runner,
+} = require('./domHarness');
 
 // No rest window so a different doctor is a legal edit
 const reset = (w, docs) => {
@@ -54,11 +62,16 @@ const reset = (w, docs) => {
         await w.generateSchedule();
         edit(5);
         const cfg = JSON.parse(JSON.stringify(snap(w, 'getCurrentConfig()')));
-        cfg.manualOverrides = { 10: { 0: 'B' } };
+        // Adopted overrides are re-validated against the new roster: use a doctor legal on day 10
+        const free = snap(w, 'globalResult.doctors').find(
+            (n) => w.validateManualAssignment(w.eval('resultConfig()'), 10, 0, n).ok
+        );
+        assert.ok(free, 'no legal doctor for day 10');
+        cfg.manualOverrides = { 10: { 0: free } };
         await importJSON(w, cfg);
-        assert.deepStrictEqual(snap(w, 'manualOverrides'), { 10: { 0: 'B' } });
+        assert.deepStrictEqual(snap(w, 'manualOverrides'), { 10: { 0: free } });
         assert.strictEqual(snap(w, 'undoStack.length'), 0);
-        assert.strictEqual(names(10)[0], 'B');
+        assert.strictEqual(names(10)[0], free);
     });
 
     await test('S2 removeDoctor after a failed run keeps the edit until a run commits', async () => {

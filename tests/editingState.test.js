@@ -1,5 +1,14 @@
 const assert = require('assert');
-const { loadApp, reset: baseReset, settle, setInput, snap, importJSON, runner, validIdx } = require('./domHarness');
+const {
+    loadApp,
+    reset: baseReset,
+    settle,
+    setInput,
+    snap,
+    importJSON,
+    runner,
+    validIdx,
+} = require('./domHarness');
 // No rest window: these tests make arbitrary edits, which the override validator would reject inside one
 const reset = (w, docs) => {
     baseReset(w, docs);
@@ -72,7 +81,7 @@ const reset = (w, docs) => {
         await importJSON(w, {
             doctors: ['A', 'B', 'C', 'D'],
             manualOverrides: { 5: { 0: 'D' } },
-            inputs: { inputMonth: '3', inputYear: '2026' },
+            inputs: { inputMonth: '3', inputYear: '2026', inputOffDutyPeriod: '0' }, // adopted overrides are re-validated, so no rest window
         });
         assert.deepStrictEqual(snap(w, 'manualOverrides'), { 5: { 0: 'D' } });
         assert.strictEqual(w.eval('undoStack.length'), 0);
