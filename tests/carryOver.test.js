@@ -102,6 +102,26 @@ const { loadApp, reset, settle, setInput, snap } = require('./domHarness');
         assert.notStrictEqual(rows()[0].selectedDocs[0].name, night);
     });
 
+    await test('day-1 rest relaxed by the carry-over is recorded as a spacing relaxation', async () => {
+        reset(w, ['A', 'B', 'C']);
+        setInput(w, 'inputYear', '2026');
+        setInput(w, 'inputDefaultSlots', '2');
+        setInput(w, 'inputOffDutyPeriod', '2');
+        await gen(1);
+        w.eval(`globalResult.schedule[30].selectedDocs[0].name = 'B';
+                globalResult.schedule[30].selectedDocs[1].name = 'C';`);
+        await gen(2);
+        const feb1 = names(rows()[0]);
+        assert.ok(feb1.includes('A'), feb1.join());
+        const broke = feb1.find((n) => n === 'B' || n === 'C');
+        assert.ok(broke, 'expected a relaxed pick: ' + feb1.join());
+        const rel = snap(w, 'globalResult.relaxations');
+        assert.ok(
+            rel.some((r) => r.day === 1 && r.kind === 'spacing' && r.doctors.includes(broke)),
+            JSON.stringify(rel)
+        );
+    });
+
     await test('a partial result without config does not throw and carries nothing', async () => {
         w.eval(`
             globalResult = {

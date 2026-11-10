@@ -2392,27 +2392,39 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
             let chosenSpecial = null;
             let specialRole = null;
 
+            // Rest look-back, including the rest carried in from the previous period on day 1
+            const restBroken = (doc) => {
+                for (let lookBack = 1; lookBack < offDutyPeriod; lookBack++) {
+                    if ((scheduleMap[day - lookBack] || []).includes(doc)) return true;
+                }
+                if (day === 1 && carryOver) {
+                    for (const duty of carryOver.dutiesByDoctor[doc] || []) {
+                        if (dayDiff(duty.date, periodStart) < offDutyPeriod) return true;
+                    }
+                }
+                return false;
+            };
+            // Back-to-back holidays (soft), including across the period boundary on day 1
+            const holidayAdjacent = (doc) => {
+                if (!isHoliday) return false;
+                if (holidaySet.has(day - 1) && (scheduleMap[day - 1] || []).includes(doc))
+                    return true;
+                if (day === 1 && carryOver) {
+                    return (carryOver.dutiesByDoctor[doc] || []).some(
+                        (duty) => dayDiff(duty.date, periodStart) === 1 && duty.holiday
+                    );
+                }
+                return false;
+            };
+            // In floor mode the rest rule is never relaxed (spec 5.4)
+            const floorMode = (config.minNightShifts || 0) > 0;
+
             // Hard rules shared by the normal pick (cascade level 1) and the special-doctor pick
             const strictOk = (doc, slotIdx) => {
                 if (chosenToday.includes(doc)) return false;
                 if (isBlockedByOffRequest(doc, slotIdx) || isBlockedByNightToMorning(doc, slotIdx))
                     return false;
-                for (let lookBack = 1; lookBack < offDutyPeriod; lookBack++) {
-                    if ((scheduleMap[day - lookBack] || []).includes(doc)) return false;
-                }
-                if (day === 1 && carryOver) {
-                    for (const duty of carryOver.dutiesByDoctor[doc] || []) {
-                        const ago = dayDiff(duty.date, periodStart);
-                        if (ago < offDutyPeriod) return false;
-                        if (ago === 1 && isHoliday && duty.holiday) return false;
-                    }
-                }
-                if (
-                    isHoliday &&
-                    holidaySet.has(day - 1) &&
-                    (scheduleMap[day - 1] || []).includes(doc)
-                )
-                    return false;
+                if (restBroken(doc) || holidayAdjacent(doc)) return false;
                 return !chosenToday.some((otherDoc) => areConflicting(doc, otherDoc));
             };
 
@@ -2483,6 +2495,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         level = 2;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
+                            if (floorMode && restBroken(doc)) return false;
                             if (isBlockedByOffRequest(doc, i) || isBlockedByNightToMorning(doc, i))
                                 return false;
                             if (chosenToday.some((otherDoc) => areConflicting(doc, otherDoc)))
@@ -2498,6 +2511,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         level = 3;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
+                            if (floorMode && restBroken(doc)) return false;
                             if (isBlockedByOffRequest(doc, i) || isBlockedByNightToMorning(doc, i))
                                 return false;
                             if (chosenSpecial && specialDocs.includes(doc) && doc !== chosenSpecial)
@@ -2511,6 +2525,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         level = 4;
                         availableDocs = roleDocs.filter((doc) => {
                             if (chosenToday.includes(doc)) return false;
+                            if (floorMode && restBroken(doc)) return false;
                             if (offToday.has(doc) || isBlockedByNightToMorning(doc, i))
                                 return false;
                             if (chosenSpecial && specialDocs.includes(doc) && doc !== chosenSpecial)
@@ -2525,6 +2540,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                         availableDocs = roleDocs.filter(
                             (doc) =>
                                 !chosenToday.includes(doc) &&
+                                !(floorMode && restBroken(doc)) &&
                                 !offToday.has(doc) &&
                                 !isBlockedByNightToMorning(doc, i)
                         );
@@ -2562,12 +2578,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                                 areConflicting(chosenDoc, o)
                             );
                             const spacingBroken =
-                                Array.from({ length: Math.max(0, offDutyPeriod - 1) }, (_, k) =>
-                                    (scheduleMap[day - k - 1] || []).includes(chosenDoc)
-                                ).some(Boolean) ||
-                                (isHoliday &&
-                                    holidaySet.has(day - 1) &&
-                                    (scheduleMap[day - 1] || []).includes(chosenDoc));
+                                restBroken(chosenDoc) || holidayAdjacent(chosenDoc);
                             const specialBroken =
                                 chosenSpecial &&
                                 specialDocs.includes(chosenDoc) &&
@@ -3095,6 +3106,19 @@ async function runScheduleOnce() {
 
             updateDayNote(row, null, config, snapshot);
         });
+
+        // Floor mode never ships a shortage: the rest rule is not relaxed, so refuse instead
+        if (config.minNightShifts > 0 && shortages > 0) {
+            const gapDays = bestCandidate.schedule
+                .filter((row) => row.selectedDocs.some((d) => d.name === SHORTAGE_MARKER))
+                .map((row) => row.dayDisplay || row.day)
+                .join(', ');
+            throw new Error(
+                currentLang === 'th'
+                    ? `ไม่สามารถจัดเวรวันที่ ${gapDays} ได้โดยไม่ผิดกฎวันพัก — เพิ่มแพทย์ ลดขั้นต่ำ หรือลดจำนวนวันพัก`
+                    : `Cannot fill day ${gapDays} without breaking the rest rule — add a doctor, lower the minimum or reduce the gap`
+            );
+        }
 
         // Final floor verification: never render a roster that missed the minimum.
         if (config.minNightShifts > 0) {

@@ -60,7 +60,7 @@ const countDuties = (schedule) => {
         setInput(w, 'inputNightSlots', String(opts.nightSlots === undefined ? 2 : opts.nightSlots));
         setInput(w, 'inputMinNightShifts', String(opts.floor === undefined ? 14 : opts.floor));
         setInput(w, 'chkAllowExtraNightDoctor', opts.extra !== false);
-        setInput(w, 'inputOffDutyPeriod', '1');
+        setInput(w, 'inputOffDutyPeriod', String(opts.gap === undefined ? 1 : opts.gap));
         w.toasts.length = 0;
     };
 
@@ -167,12 +167,13 @@ const countDuties = (schedule) => {
         [7, 5],
         [6, 5],
         [8, 5],
-        [5, 8],
+        [5, 8], // 5 doctors cannot rest a day between duties here, so no rest day (gap 0)
     ]) {
         await test(`shift mode 1M/1A/1N: ${n} doctors, floor ${floor} (day slots leave below-floor doctors free for the night)`, async () => {
             const names = 'ABCDEFGH'.slice(0, n).split('');
             // 7 doctors, 31-day month, floor 5: morning/afternoon used to grab the low-night doctors
             setupShift(names, {
+                gap: n === 5 ? 0 : 1,
                 month: 1,
                 morning: 1,
                 afternoon: 1,
@@ -193,6 +194,35 @@ const countDuties = (schedule) => {
             );
         });
     }
+
+    await test('floor mode never relaxes the rest rule: refuses instead of shipping spacing breaks', async () => {
+        setupShift(['A', 'B', 'C', 'D', 'E'], {
+            morning: 1,
+            afternoon: 1,
+            nightSlots: 1,
+            floor: 7,
+        });
+        setInput(w, 'inputOffDutyPeriod', '2');
+        const schedule = await run();
+        const relax = snap(w, 'globalResult ? globalResult.relaxations : []');
+        assert.ok(!relax.some((r) => r.kind === 'spacing'), 'rest relaxation shipped');
+        assert.strictEqual(schedule, null, 'a roster that cannot honour rest must be refused');
+        const err = w.toasts.find((t) => t.isError);
+        assert.ok(err && /Cannot fill day \d+.*rest rule/.test(err.msg), JSON.stringify(w.toasts));
+    });
+
+    await test('floor 0 roster is byte-identical to the pre-fix solver (cascade still relaxes)', async () => {
+        reset(w, ['A', 'B', 'C', 'D', 'E']);
+        setInput(w, 'inputMonth', '4');
+        setInput(w, 'inputYear', '2026');
+        setInput(w, 'inputDefaultSlots', '2');
+        setInput(w, 'inputOffDutyPeriod', '3');
+        const schedule = await run();
+        const names = schedule.map((r) => r.selectedDocs.map((d) => d.name).join('+')).join(';');
+        const hash = require('crypto').createHash('sha1').update(names).digest('hex');
+        assert.strictEqual(hash, 'fe825d72c2433d6fdbc2d2aed1a2d89809646ea6');
+        assert.strictEqual(snap(w, 'globalResult.relaxations.length'), 38);
+    });
 
     await test('a manual edit cannot drop a doctor below the floor', async () => {
         setup(['A', 'B', 'C', 'D', 'E']);
