@@ -970,15 +970,17 @@ function showToast(msg, isError = false) {
     const toast = document.getElementById('toast');
     const toastContent = document.getElementById('toastContent');
     const safeMsg = esc(msg);
+    // Errors interrupt a screen reader, everything else waits its turn
+    if (toast.setAttribute) toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
 
     if (isError) {
         toastContent.className =
             'flex items-center gap-3 px-4 py-3 rounded-md shadow-2xl font-medium text-[13px] border bg-signal/10 text-signal dark:text-signal-bright border-signal/30';
-        toastContent.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5 text-signal-bright"></i> <span id="toastMsg">${safeMsg}</span>`;
+        toastContent.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5 text-signal-bright"></i> <span id="toastMsg" class="whitespace-pre-line">${safeMsg}</span>`;
     } else {
         toastContent.className =
             'flex items-center gap-3 px-4 py-3 rounded-md shadow-2xl font-medium text-[13px] border bg-ink dark:bg-sheet-dark text-white border-ink dark:border-rule-dark';
-        toastContent.innerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-duty-bright"></i> <span id="toastMsg">${safeMsg}</span>`;
+        toastContent.innerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-duty-bright"></i> <span id="toastMsg" class="whitespace-pre-line">${safeMsg}</span>`;
     }
     lucide.createIcons();
 

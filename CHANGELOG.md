@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 ### Added
 * **Night floor:** every doctor can be required to have at least N shifts (default 14; 0 disables). A toggleable "extra doctor on a night" plan adds one extra doctor only when needed to reach the floor, spread across the month and allocated by role need; the plan is shown above the results.
-* **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available") instead of relaxing the rest rule.
+* **Feasibility refusal:** when the calendar cannot supply the floor, the roster is refused with the exact arithmetic ("70 required / 60 available"). While the floor is on, the rest rule (including the rest carried in from the previous period) is never relaxed: if a day cannot be filled without breaking it, the roster is refused with "Cannot fill day N ... without breaking the rest rule" (Thai and English) instead of shipping a shortage. Holiday spacing, conflicts, day-before-off and the special rule can still be relaxed, and every relaxation is recorded and listed. With the floor off (0), the solver behaves as before.
 * **Deterministic solver:** the search is seeded from the inputs, so identical inputs produce an identical roster.
 * **Playwright end-to-end suite** (`tests/playwrightE2e.test.js`) driving the system Chrome; it runs last in `npm test`.
 * **Relaxation telemetry:** every rule the cascade gives up is recorded on `globalResult.relaxations` (`day`, `slot`, `level`, `kind`, `doctors`), scored (conflict 50 000, day-before-off 5 000, spacing/special 1 000) and listed in a per-day warnings panel; the success toast reports the warning count in Thai and English.
@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * The quota-density sort comparator reads a per-candidate suffix array of remaining availability in O(1) instead of rescanning forward per comparison; chosen rosters are unchanged.
 
 ### Fixed
+* **Shift-mode night floor:** morning and afternoon slots no longer take the doctors who most need nights; day slots now prefer doctors who already meet the floor, and night slots (including the planned extra) prefer those furthest below it. Feasible plans such as 7 doctors, 1 morning / 1 afternoon / 1 night, 31 days, floor 5 are no longer refused.
+* **Day-1 rest relaxed by the carry-over** is now recorded and penalised as a `spacing` relaxation (floor 0 only; with a floor the rest rule is never relaxed).
+* **Manual overrides are re-validated** whenever they are re-applied on a fresh solver result (regenerate, import, undo). An override that no longer passes the rules is dropped, latest day and highest slot first, with one Thai/English toast naming the count and days; a valid same-day swap survives. Undo is re-validated rather than cleared.
+* **"Reset to auto"** is validated like any edit: it is rejected, with a toast and no change, when the solver's pick would duplicate or break a rule against neighbouring overrides (for example after a drag swap).
+* **Edit-rejection toast** is fully translated: the rule label and detail show in Thai or English, never a raw code such as `nightToMorning`.
+* **Accessibility:** toasts and the relaxation panel are announced by screen readers (`role="status"`, `aria-live`; errors are assertive). Multi-line error toasts keep their line breaks.
 * **Custom-range per-day slot overrides** now match by a canonical `YYYY-MM-DD` key (also accepting `DD/MM/YYYY` or a bare day number); numeric keys no longer silently miss the lookup.
 * **Manual overrides are validated before the schedule mutates:** duplicate, conflict, role, off request, rest, holiday, night→morning, quota and floor failures are rejected with a toast naming the rule. Drag/drop validates the final state of the whole swap atomically, so an illegal move changes nothing and leaves no undo entry.
 * **Invalid input is rejected or clamped:** impossible dates (31/02, 31/04, 00/01) are refused while leap days remain valid, start > end shows a toast, and negative/NaN slot counts no longer throw `RangeError`.

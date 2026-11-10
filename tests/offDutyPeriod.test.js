@@ -332,6 +332,19 @@ async function runTest(name, testFn) {
         global.showToast = (msg) => {}; // restore
     });
 
-    console.log(`\nResults: ${passed} passed, ${8 - passed} failed`);
-    if (passed !== 8) process.exit(1);
+    // TEST 9/10: the legacy 1-based value is migrated on import, a current config is left alone
+    await runTest('TEST 9: legacy config (no configVersion) with 2 loads as 1', async () => {
+        resetMocks();
+        applyConfig({ inputs: { inputOffDutyPeriod: '2' } });
+        assert.strictEqual(mockDOM['inputOffDutyPeriod'].value, '1');
+    });
+
+    await runTest('TEST 10: configVersion 2 keeps 2', async () => {
+        resetMocks();
+        applyConfig({ configVersion: 2, inputs: { inputOffDutyPeriod: '2' } });
+        assert.strictEqual(mockDOM['inputOffDutyPeriod'].value, '2');
+    });
+
+    console.log(`\nResults: ${passed} passed, ${10 - passed} failed`);
+    if (passed !== 10) process.exit(1);
 })();
