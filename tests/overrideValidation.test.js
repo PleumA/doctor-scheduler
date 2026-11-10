@@ -26,7 +26,8 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         const before = sched();
         w.toasts.length = 0;
         w.updateDoctorAssignment(day, slot, DOCS.indexOf(doc));
-        const err = w.toasts.find((t) => t.isError && t.msg.includes(`(${reason})`));
+        const label = w.eval(`translations.en.editReason_${reason}`);
+        const err = w.toasts.find((t) => t.isError && t.msg.includes(`(${label})`));
         assert.ok(err, `expected ${reason}, got ${JSON.stringify(w.toasts)}`);
         assert.deepStrictEqual(sched(), before, 'schedule changed');
     };
@@ -191,7 +192,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
             ]),
             false
         );
-        assert.ok(w.toasts.some((t) => t.isError && t.msg.includes('(conflict)')));
+        assert.ok(w.toasts.some((t) => t.isError && t.msg.includes('(Conflicting doctors)')));
         assert.deepStrictEqual(sched(), before);
         assert.strictEqual(w.eval('undoStack.length'), undo);
     });
@@ -277,6 +278,77 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         assert.deepStrictEqual(sched(), before);
         assert.deepStrictEqual(snap(w, 'manualOverrides'), overrides);
         assert.strictEqual(w.eval('undoStack.length'), undo);
+    });
+
+    const setLang = (l) => w.eval(`currentLang = '${l}'`);
+    const restReject = () => {
+        w.toasts.length = 0;
+        return w;
+    };
+    await test('F6: a rejected rest edit toasts the Thai label with no Latin reason code', async () => {
+        const s = await gen({ slots: '1', gap: '2' });
+        const x = namesOf(s[9])[0];
+        setLang('th');
+        try {
+            restReject().updateDoctorAssignment(11, 0, idxOf(x));
+            const msg = w.toasts.find((t) => t.isError).msg;
+            assert.ok(msg.includes(w.eval('translations.th.editReason_rest')), msg);
+            assert.ok(!/rest|nightToMorning|floor|duplicate|conflict|quota/.test(msg), msg);
+            assert.ok(!/needs|days between/.test(msg), `English detail leaked: ${msg}`);
+        } finally {
+            setLang('en');
+        }
+    });
+
+    await test('F6: the same rejection in English uses the English label, never a raw code', async () => {
+        const s = await gen({ slots: '1', gap: '2' });
+        const x = namesOf(s[9])[0];
+        restReject().updateDoctorAssignment(11, 0, idxOf(x));
+        const msg = w.toasts.find((t) => t.isError).msg;
+        assert.ok(msg.includes('(Rest rule)'), msg);
+    });
+
+    await test('F6: every reason and detail key exists in Thai and English', async () => {
+        const keys = [
+            'duplicate',
+            'conflict',
+            'role',
+            'off',
+            'rest',
+            'holiday',
+            'nightToMorning',
+            'quota',
+            'floor',
+        ];
+        const details = [
+            'duplicate',
+            'conflict',
+            'role',
+            'off',
+            'rest',
+            'restCarried',
+            'holidayPrev',
+            'holidayNext',
+            'holidayCarried',
+            'nightPrev',
+            'nightNext',
+            'quota',
+            'floor',
+        ];
+        ['th', 'en'].forEach((l) => {
+            keys.forEach((k) =>
+                assert.ok(w.eval(`translations.${l}.editReason_${k}`), `${l} reason ${k}`)
+            );
+            details.forEach((k) =>
+                assert.ok(w.eval(`translations.${l}.editDetail_${k}`), `${l} detail ${k}`)
+            );
+        });
+        details.forEach((k) =>
+            assert.ok(
+                /[฀-๿]/.test(w.eval(`translations.th.editDetail_${k}`)),
+                `th detail ${k} not Thai`
+            )
+        );
     });
 
     done();

@@ -3692,7 +3692,7 @@ function updateTargetedCellDOM(day, slotIndex) {
 // whose intermediate state (e.g. a same-day duplicate) is never validated, only the final one.
 function validateEdits(config, edits) {
     const ok = { ok: true, reason: null };
-    const fail = (reason, detail) => ({ ok: false, reason, detail });
+    const fail = (reason, detailKey, params) => ({ ok: false, reason, detailKey, params });
     const ctx = resultCtx();
     const rows = (globalResult && globalResult.schedule) || [];
     const isReal = (n) => n && n !== SHORTAGE_MARKER && n !== '-';
@@ -3720,40 +3720,40 @@ function validateEdits(config, edits) {
         const isNight = isShift && slotIndex >= nightStart;
         const today = sim(day);
         const others = today.filter((n, i) => i !== slotIndex && isReal(n));
-        if (others.includes(doc)) return fail('duplicate', `${doc} is already on day ${day}`);
+        if (others.includes(doc)) return fail('duplicate', 'duplicate', { doc, day });
         const clash = others.find((o) => config.areConflicting(doc, o));
-        if (clash) return fail('conflict', `${doc} conflicts with ${clash}`);
+        if (clash) return fail('conflict', 'conflict', { doc, other: clash });
 
         if (config.roleBased) {
             const need = expandSlots(config.getRoleSlotsForDay(day))[slotIndex];
             const has = (config.doctorRoles && config.doctorRoles[doc]) || 'Default';
-            if (need && need !== has) return fail('role', `slot needs ${need}, ${doc} is ${has}`);
+            if (need && need !== has) return fail('role', 'role', { doc, need, has });
         }
 
-        if (offOn(day).has(doc)) return fail('off', `${doc} requested off on day ${day}`);
+        if (offOn(day).has(doc)) return fail('off', 'off', { doc, day });
         if ((!isShift || isNight) && offOn(day + 1).has(doc))
-            return fail('off', `${doc} requested off on day ${day + 1}`);
+            return fail('off', 'off', { doc, day: day + 1 });
 
         const carried = (config.carryOver && config.carryOver.dutiesByDoctor[doc]) || [];
         for (let k = 1; k < gap; k++) {
             if (sim(day - k).includes(doc) || sim(day + k).includes(doc))
-                return fail('rest', `${doc} needs ${gap} days between duties`);
+                return fail('rest', 'rest', { doc, gap });
         }
         for (const duty of carried) {
             if (dayDiff(duty.date, config.periodStart) + (day - 1) < gap)
-                return fail('rest', `${doc} worked ${duty.date}, inside the rest window`);
+                return fail('rest', 'restCarried', { doc, date: duty.date });
         }
 
         if (holidaySet.has(day) && holidaySet.has(day - 1) && sim(day - 1).includes(doc))
-            return fail('holiday', `${doc} worked the previous holiday`);
+            return fail('holiday', 'holidayPrev', { doc });
         if (holidaySet.has(day) && holidaySet.has(day + 1) && sim(day + 1).includes(doc))
-            return fail('holiday', `${doc} works the next holiday`);
+            return fail('holiday', 'holidayNext', { doc });
         if (
             day === 1 &&
             holidaySet.has(1) &&
             carried.some((x) => x.holiday && dayDiff(x.date, config.periodStart) === 1)
         )
-            return fail('holiday', `${doc} worked the holiday before the period`);
+            return fail('holiday', 'holidayCarried', { doc });
 
         if (isShift) {
             const carriedNight =
@@ -3768,14 +3768,14 @@ function validateEdits(config, edits) {
                         .slice(nightStart)
                         .includes(doc))
             )
-                return fail('nightToMorning', `${doc} worked last night`);
+                return fail('nightToMorning', 'nightPrev', { doc });
             if (
                 isNight &&
                 sim(day + 1)
                     .slice(0, morning)
                     .includes(doc)
             )
-                return fail('nightToMorning', `${doc} has a morning shift tomorrow`);
+                return fail('nightToMorning', 'nightNext', { doc });
         }
 
         const key = getQuotaKey(doc, config);
@@ -3783,7 +3783,7 @@ function validateEdits(config, edits) {
             let total = 0;
             rows.forEach((_, i) => (total += sim(i + 1).filter((n) => n === doc).length));
             if (total > config.quota[key])
-                return fail('quota', `${doc} would exceed quota ${config.quota[key]}`);
+                return fail('quota', 'quota', { doc, quota: config.quota[key] });
         }
     }
 
@@ -3807,8 +3807,7 @@ function validateEdits(config, edits) {
         const broken = ctx.doctors.filter(
             (d) => after[d] < before[d] && before[d] >= floor && after[d] < floor
         );
-        if (broken.length > 0)
-            return fail('floor', `${broken.join(', ')} would fall below ${floor} shifts`);
+        if (broken.length > 0) return fail('floor', 'floor', { names: broken.join(', '), floor });
     }
     return ok;
 }
@@ -3817,13 +3816,18 @@ function validateManualAssignment(config, day, slotIndex, newDoctor) {
     return validateEdits(config, [{ day, slotIndex, doc: newDoctor }]);
 }
 
-const toastEditRejected = (v) =>
+// Reason label and detail come from translations (editReason_*, editDetail_*); showToast escapes
+// the finished message, so names and day numbers are interpolated raw here.
+const toastEditRejected = (v) => {
+    const T = translations[currentLang];
+    const detail = (T['editDetail_' + v.detailKey] || '').replace(/\{(\w+)\}/g, (m, k) =>
+        v.params && k in v.params ? v.params[k] : m
+    );
     showToast(
-        currentLang === 'th'
-            ? `แก้ไม่ได้ (${v.reason}): ${v.detail || ''}`
-            : `Cannot edit (${v.reason}): ${v.detail || ''}`,
+        `${currentLang === 'th' ? 'แก้ไม่ได้' : 'Cannot edit'} (${T['editReason_' + v.reason] || ''}): ${detail}`,
         true
     );
+};
 
 // Drag/drop moves: validate the final schedule of all edits as one unit, then apply them.
 // edits: [{ day, slotIndex, docIndex }]. Returns false (nothing changed, toast shown) if illegal.
