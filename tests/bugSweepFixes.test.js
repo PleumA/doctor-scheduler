@@ -1,5 +1,10 @@
 const assert = require('assert');
-const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, runner, sleep, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 (async () => {
     const w = await loadApp();
@@ -39,7 +44,7 @@ const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./dom
     await test('L2 undo after removeDoctor leaves no ghost doctor', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 1, 0);
+        w.updateDoctorAssignment(5, 1, validIdx(w, 5, 1, 0));
         w.removeDoctor(0);
         await settle(w);
         w.undoLastAction();
@@ -81,10 +86,12 @@ const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./dom
         await w.generateSchedule();
         setInput(w, 'inputSinglePoolQuota', 'A:1');
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 0, 3);
-        assert.strictEqual(names(5)[0], 'D');
-        assert.strictEqual(d.querySelector('#btn-day-5-slot-0 span.truncate').textContent, 'D');
-        assert.deepStrictEqual(snap(w, 'manualOverrides[5]'), { 0: 'D' });
+        const di = validIdx(w, 5, 0, 3);
+        const picked = snap(w, 'globalResult.doctors')[di];
+        w.updateDoctorAssignment(5, 0, di);
+        assert.strictEqual(names(5)[0], picked);
+        assert.strictEqual(d.querySelector('#btn-day-5-slot-0 span.truncate').textContent, picked);
+        assert.deepStrictEqual(snap(w, 'manualOverrides[5]'), { 0: picked });
         const sumTotal = snap(w, 'globalResult.summary.reduce((a,s)=>a+s.total,0)');
         const gridTotal = snap(
             w,

@@ -197,7 +197,7 @@ async function runTests() {
         await global.generateSchedule();
 
         relax();
-        global.updateDoctorAssignment(10, 0, freeIdx(10));
+        global.updateDoctorAssignment(14, 0, freeIdx(14));
         assert.strictEqual(undoStack.length, initialLen + 1, 'Undo stack should increase');
         assert.strictEqual(typeof undoStack[undoStack.length - 1], 'object');
 
@@ -325,7 +325,7 @@ async function runTests() {
         global.updateDoctorAssignment(shortageDay, shortageSlot, freeDoc);
 
         // Verify the slot now contains doctor A
-                let overriddenDoc = globalResult.schedule[shortageDay - 1].selectedDocs[shortageSlot].name;
+        let overriddenDoc = globalResult.schedule[shortageDay - 1].selectedDocs[shortageSlot].name;
         assert.strictEqual(overriddenDoc, doctors[freeDoc], 'Slot should now contain the free doctor');
 
         // Count new shortages

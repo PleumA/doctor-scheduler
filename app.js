@@ -3608,99 +3608,154 @@ function updateTargetedCellDOM(day, slotIndex) {
     if (noteCellCal) noteCellCal.innerHTML = noteHtmlCal;
 }
 
-// Check a proposed single-slot replacement against the hard rules, on the displayed schedule.
-// Returns the first failing rule: { ok, reason, detail }.
-function validateManualAssignment(config, day, slotIndex, newDoctor) {
+// Check proposed slot replacements (applied together as one unit) against the hard rules on the
+// displayed schedule. edits: [{ day, slotIndex, doc }]. Returns the first failing rule:
+// { ok, reason, detail }. A single edit is the normal dropdown pick; two edits are a drag swap,
+// whose intermediate state (e.g. a same-day duplicate) is never validated, only the final one.
+function validateEdits(config, edits) {
     const ok = { ok: true, reason: null };
     const fail = (reason, detail) => ({ ok: false, reason, detail });
     const ctx = resultCtx();
-    const rows = ctx.schedule || (globalResult && globalResult.schedule) || [];
-    const row = rows[day - 1];
-    if (!row) return ok;
+    const rows = (globalResult && globalResult.schedule) || [];
     const isReal = (n) => n && n !== SHORTAGE_MARKER && n !== '-';
-    const prev = row.selectedDocs[slotIndex] && row.selectedDocs[slotIndex].name;
-    // Simulated schedule: day -> names
-    const sim = (d) =>
-        (rows[d - 1] ? rows[d - 1].selectedDocs.map((s) => s && s.name) : []).map((n, i) =>
-            d === day && i === slotIndex ? newDoctor : n
-        );
+    const overlay = {};
+    edits.forEach((e) => (overlay[`${e.day}:${e.slotIndex}`] = e.doc));
+    const orig = (d) => (rows[d - 1] ? rows[d - 1].selectedDocs.map((s) => s && s.name) : []);
+    const sim = (d) => orig(d).map((n, i) => (`${d}:${i}` in overlay ? overlay[`${d}:${i}`] : n));
     const isShift = !!config.isShiftBased;
     const morning = config.morningSlots || 0;
     const nightStart = morning + (config.afternoonSlots || 0);
-    const isNight = isShift && slotIndex >= nightStart;
+    const holidaySet = config.holidaySet || new Set();
+    const gap = config.offDutyPeriod || 1;
+    const offMap = config.offMap || {};
+    const dateKey = (d) => {
+        const dt = ctx.dates && ctx.dates[d - 1];
+        if (!config.isCustomDateRange || !dt) return d;
+        const p = (n) => String(n).padStart(2, '0');
+        return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+    };
+    const offOn = (d) => (d >= 1 && d <= rows.length && offMap[dateKey(d)]) || new Set();
 
-    if (isReal(newDoctor) && newDoctor !== prev) {
+    for (const { day, slotIndex, doc } of edits) {
+        const row = rows[day - 1];
+        if (!row || !isReal(doc) || doc === orig(day)[slotIndex]) continue;
+        const isNight = isShift && slotIndex >= nightStart;
         const today = sim(day);
         const others = today.filter((n, i) => i !== slotIndex && isReal(n));
-        if (others.includes(newDoctor)) return fail('duplicate', `${newDoctor} is already on day ${day}`);
-        const clash = others.find((o) => config.areConflicting(newDoctor, o));
-        if (clash) return fail('conflict', `${newDoctor} conflicts with ${clash}`);
+        if (others.includes(doc)) return fail('duplicate', `${doc} is already on day ${day}`);
+        const clash = others.find((o) => config.areConflicting(doc, o));
+        if (clash) return fail('conflict', `${doc} conflicts with ${clash}`);
 
         if (config.roleBased) {
             const need = expandSlots(config.getRoleSlotsForDay(day))[slotIndex];
-            const has = (config.doctorRoles && config.doctorRoles[newDoctor]) || 'Default';
-            if (need && need !== has) return fail('role', `slot needs ${need}, ${newDoctor} is ${has}`);
+            const has = (config.doctorRoles && config.doctorRoles[doc]) || 'Default';
+            if (need && need !== has) return fail('role', `slot needs ${need}, ${doc} is ${has}`);
         }
 
-        const dateKey = (d) => {
-            const dt = ctx.dates && ctx.dates[d - 1];
-            if (!config.isCustomDateRange || !dt) return d;
-            const p = (n) => String(n).padStart(2, '0');
-            return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()}`;
-        };
-        const offMap = config.offMap || {};
-        const offOn = (d) => (d >= 1 && d <= rows.length && offMap[dateKey(d)]) || new Set();
-        if (offOn(day).has(newDoctor)) return fail('off', `${newDoctor} requested off on day ${day}`);
-        if ((!isShift || isNight) && offOn(day + 1).has(newDoctor))
-            return fail('off', `${newDoctor} requested off on day ${day + 1}`);
+        if (offOn(day).has(doc)) return fail('off', `${doc} requested off on day ${day}`);
+        if ((!isShift || isNight) && offOn(day + 1).has(doc))
+            return fail('off', `${doc} requested off on day ${day + 1}`);
 
-        const gap = config.offDutyPeriod || 1;
+        const carried = (config.carryOver && config.carryOver.dutiesByDoctor[doc]) || [];
         for (let k = 1; k < gap; k++) {
-            if (sim(day - k).includes(newDoctor) || sim(day + k).includes(newDoctor))
-                return fail('rest', `${newDoctor} needs ${gap} days between duties`);
+            if (sim(day - k).includes(doc) || sim(day + k).includes(doc))
+                return fail('rest', `${doc} needs ${gap} days between duties`);
         }
-        const carried = (config.carryOver && config.carryOver.dutiesByDoctor[newDoctor]) || [];
         for (const duty of carried) {
             if (dayDiff(duty.date, config.periodStart) + (day - 1) < gap)
-                return fail('rest', `${newDoctor} worked ${duty.date}, inside the rest window`);
+                return fail('rest', `${doc} worked ${duty.date}, inside the rest window`);
         }
+
+        if (holidaySet.has(day) && (holidaySet.has(day - 1) && sim(day - 1).includes(doc)))
+            return fail('holiday', `${doc} worked the previous holiday`);
+        if (holidaySet.has(day) && holidaySet.has(day + 1) && sim(day + 1).includes(doc))
+            return fail('holiday', `${doc} works the next holiday`);
+        if (
+            day === 1 &&
+            holidaySet.has(1) &&
+            carried.some((x) => x.holiday && dayDiff(x.date, config.periodStart) === 1)
+        )
+            return fail('holiday', `${doc} worked the holiday before the period`);
 
         if (isShift) {
-            const inNight = (d) => sim(d).slice(nightStart).includes(newDoctor);
-            const carriedNight = (c) =>
-                carried.some((x) => x.type === 'night' && dayDiff(x.date, config.periodStart) === 1) && c;
-            if (slotIndex < morning && (inNight(day - 1) || carriedNight(day === 1)))
-                return fail('nightToMorning', `${newDoctor} worked last night`);
-            if (isNight && sim(day + 1).slice(0, morning).includes(newDoctor))
-                return fail('nightToMorning', `${newDoctor} has a morning shift tomorrow`);
+            const carriedNight =
+                day === 1 &&
+                carried.some((x) => x.type === 'night' && dayDiff(x.date, config.periodStart) === 1);
+            if (slotIndex < morning && (carriedNight || sim(day - 1).slice(nightStart).includes(doc)))
+                return fail('nightToMorning', `${doc} worked last night`);
+            if (isNight && sim(day + 1).slice(0, morning).includes(doc))
+                return fail('nightToMorning', `${doc} has a morning shift tomorrow`);
         }
 
-        const key = getQuotaKey(newDoctor, config);
+        const key = getQuotaKey(doc, config);
         if (config.quota && config.quota[key] !== undefined) {
             let total = 0;
-            rows.forEach((_, i) => {
-                total += sim(i + 1).filter((n) => n === newDoctor).length;
-            });
-            if (total > config.quota[key]) return fail('quota', `${newDoctor} would exceed quota ${config.quota[key]}`);
+            rows.forEach((_, i) => (total += sim(i + 1).filter((n) => n === doc).length));
+            if (total > config.quota[key]) return fail('quota', `${doc} would exceed quota ${config.quota[key]}`);
         }
     }
 
-    // A manual edit may not drop a doctor below the night floor.
+    // Floor: a doctor who loses duties may not end below the night floor. One already below it
+    // is not made the cause of this edit's failure.
     const floor = config.minNightShifts || 0;
-    if (floor > 0 && (!isShift || isNight)) {
-        const counts = {};
-        rows.forEach((_, i) => {
-            sim(i + 1).forEach((name, idx) => {
-                if (isShift && idx < nightStart) return;
-                if (isReal(name)) counts[name] = (counts[name] || 0) + 1;
-            });
-        });
-        const broken = Object.keys(counts).filter((doc) => counts[doc] < floor);
+    if (floor > 0) {
+        const count = (get) => {
+            const c = {};
+            ctx.doctors.forEach((d) => (c[d] = 0));
+            rows.forEach((_, i) =>
+                get(i + 1).forEach((n, idx) => {
+                    if (isShift && idx < nightStart) return;
+                    if (isReal(n) && n in c) c[n]++;
+                })
+            );
+            return c;
+        };
+        const before = count(orig);
+        const after = count(sim);
+        const broken = ctx.doctors.filter(
+            (d) => after[d] < before[d] && before[d] >= floor && after[d] < floor
+        );
         if (broken.length > 0)
             return fail('floor', `${broken.join(', ')} would fall below ${floor} shifts`);
     }
     return ok;
 }
+
+function validateManualAssignment(config, day, slotIndex, newDoctor) {
+    return validateEdits(config, [{ day, slotIndex, doc: newDoctor }]);
+}
+
+const toastEditRejected = (v) =>
+    showToast(
+        currentLang === 'th'
+            ? `แก้ไม่ได้ (${v.reason}): ${v.detail || ''}`
+            : `Cannot edit (${v.reason}): ${v.detail || ''}`,
+        true
+    );
+
+// Drag/drop moves: validate the final schedule of all edits as one unit, then apply them.
+// edits: [{ day, slotIndex, docIndex }]. Returns false (nothing changed, toast shown) if illegal.
+window.applyPairedEdits = function (edits) {
+    if (!globalResult) return false;
+    const resolved = edits.map((e) => ({
+        day: e.day,
+        slotIndex: e.slotIndex,
+        doc: e.docIndex === -1 ? SHORTAGE_MARKER : e.docIndex >= 0 ? globalResult.doctors[e.docIndex] : '-',
+    }));
+    const v = validateEdits(resultConfig(), resolved);
+    if (!v.ok) {
+        toastEditRejected(v);
+        return false;
+    }
+    pushToUndoStack();
+    window.isDragAndDropOperation = true;
+    try {
+        edits.forEach((e) => window.updateDoctorAssignment(e.day, e.slotIndex, e.docIndex));
+    } finally {
+        window.isDragAndDropOperation = false;
+    }
+    return true;
+};
 
 // Apply a specific doctor change to a slot
 window.updateDoctorAssignment = function (day, slotIndex, docIndex) {
@@ -3715,17 +3770,12 @@ window.updateDoctorAssignment = function (day, slotIndex, docIndex) {
     if (!newDoctor) return;
     const config = resultConfig();
 
-    // Hard rules first; ponytail: drag/drop swaps are two calls whose intermediate state is
-    // transiently invalid (e.g. duplicate), so they skip validation until swaps are validated as a pair.
+    // Hard rules first. Drag/drop moves are validated as a pair by applyPairedEdits, which
+    // then sets the flag so the transient single-step state is not re-checked here.
     if (!window.isDragAndDropOperation) {
         const v = validateManualAssignment(config, day, slotIndex, newDoctor);
         if (!v.ok) {
-            showToast(
-                currentLang === 'th'
-                    ? `แก้ไม่ได้ (${v.reason}): ${v.detail || ''}`
-                    : `Cannot edit (${v.reason}): ${v.detail || ''}`,
-                true
-            );
+            toastEditRejected(v);
             return;
         }
     }
@@ -5708,17 +5758,16 @@ window.handleDrop = function (e, targetDay, targetSlotIndex, targetDocIndex) {
 
         if (srcDay === targetDay && srcSlot === targetSlotIndex) return;
 
-        window.pushToUndoStack();
-        window.isDragAndDropOperation = true;
-
         const srcDocIdx = resultCtx().doctors.indexOf(srcDoc);
-        let targetDocIdx = targetDocIndex;
 
-        // Execute swap manually
-        window.updateDoctorAssignment(srcDay, srcSlot, targetDocIdx);
-        window.updateDoctorAssignment(targetDay, targetSlotIndex, srcDocIdx);
-
-        window.isDragAndDropOperation = false;
+        // Swap both slots atomically: validated as one unit, nothing changes if illegal
+        if (
+            !window.applyPairedEdits([
+                { day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex },
+                { day: targetDay, slotIndex: targetSlotIndex, docIndex: srcDocIdx },
+            ])
+        )
+            return;
 
         // Final refresh to ensure counts are fully up to date
         const config = resultConfig();
@@ -5750,19 +5799,20 @@ window.handlePersonDrop = function (e, targetDay, targetDocIndex, targetSlotInde
         if (srcDay === targetDay) {
             if (srcDocIdx === targetDocIndex) return; // Same doc
 
-            window.pushToUndoStack();
-            window.isDragAndDropOperation = true;
-
             if (targetSlotIndex !== -1 && targetSlotIndex !== srcSlot) {
                 // Swap the two slots on the same day
-                window.updateDoctorAssignment(srcDay, srcSlot, targetDocIndex);
-                window.updateDoctorAssignment(srcDay, targetSlotIndex, srcDocIdx);
+                if (
+                    !window.applyPairedEdits([
+                        { day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex },
+                        { day: srcDay, slotIndex: targetSlotIndex, docIndex: srcDocIdx },
+                    ])
+                )
+                    return;
             } else {
                 // Just reassign the source slot to the new doctor
-                window.updateDoctorAssignment(srcDay, srcSlot, targetDocIndex);
+                if (!window.applyPairedEdits([{ day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex }]))
+                    return;
             }
-
-            window.isDragAndDropOperation = false;
 
             const config = resultConfig();
             renderTableView(config);
@@ -5814,13 +5864,13 @@ window.handlePersonDrop = function (e, targetDay, targetDocIndex, targetSlotInde
                 }
             }
 
-            window.pushToUndoStack();
-            window.isDragAndDropOperation = true;
-
-            window.updateDoctorAssignment(srcDay, srcSlot, targetDocIndex);
-            window.updateDoctorAssignment(targetDay, targetSlotIndex, srcDocIdx);
-
-            window.isDragAndDropOperation = false;
+            if (
+                !window.applyPairedEdits([
+                    { day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex },
+                    { day: targetDay, slotIndex: targetSlotIndex, docIndex: srcDocIdx },
+                ])
+            )
+                return;
 
             const config = resultConfig();
             renderTableView(config);

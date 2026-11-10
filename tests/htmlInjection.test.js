@@ -1,5 +1,10 @@
 const assert = require('assert');
-const { loadApp, reset, setInput, runner } = require('./domHarness');
+const { loadApp, reset: baseReset, setInput, runner, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 const EVIL = '<img src=x onerror=alert(1)>';
 
@@ -12,7 +17,10 @@ const EVIL = '<img src=x onerror=alert(1)>';
         reset(w, [EVIL, 'B', 'C']);
         w.eval(`offData = [{ id: 1, date: '1', names: ${JSON.stringify(EVIL)} }];`);
         await w.generateSchedule();
-        w.updateDoctorAssignment(1, 0, 0); // EVIL on day 1 although they asked for it off
+        // EVIL on day 1 although they asked for it off: only an unvalidated override can do this
+        w.isDragAndDropOperation = true;
+        w.updateDoctorAssignment(1, 0, 0);
+        w.isDragAndDropOperation = false;
         assert.strictEqual(d.querySelectorAll('#scheduleTableBody img').length, 0, 'img created');
         assert.ok(d.getElementById('note-day-1').textContent.includes(EVIL), 'note text missing');
     });
@@ -141,7 +149,7 @@ const EVIL = '<img src=x onerror=alert(1)>';
         setInput(w, 'inputOffDutyPeriod', '0');
         w.eval(`offData = [{ id: 1, date: '1', names: ${JSON.stringify(quoted)} }];`);
         await w.generateSchedule();
-        w.updateDoctorAssignment(1, 0, 0); // targeted-update path
+        w.updateDoctorAssignment(1, 0, validIdx(w, 1, 0, 0)); // targeted-update path
         assert.strictEqual(
             d.querySelectorAll('[onmouseover]').length,
             0,
@@ -153,7 +161,7 @@ const EVIL = '<img src=x onerror=alert(1)>';
             0,
             'calendar: attribute injected'
         );
-        w.updateDoctorAssignment(1, 0, 0);
+        w.updateDoctorAssignment(1, 0, validIdx(w, 1, 0, 0));
         assert.strictEqual(
             d.querySelectorAll('[onmouseover]').length,
             0,

@@ -123,4 +123,17 @@ function runner(label) {
     };
 }
 
-module.exports = { loadApp, reset, settle, setInput, snap, importJSON, runner, sleep };
+// Index of a doctor the validator accepts for (day, slot): `prefer` if legal, else the first legal
+// one other than the current occupant. Returns `prefer` when none is legal (the edit then no-ops).
+function validIdx(w, day, slot, prefer) {
+    const docs = snap(w, 'globalResult.doctors');
+    const cur = snap(w, `globalResult.schedule[${day - 1}].selectedDocs[${slot}]`);
+    const okAt = (i) =>
+        docs[i] !== (cur && cur.name) &&
+        w.validateManualAssignment(w.eval('resultConfig()'), day, slot, docs[i]).ok;
+    if (prefer >= 0 && okAt(prefer)) return prefer;
+    const i = docs.findIndex((_, k) => okAt(k));
+    return i >= 0 ? i : prefer;
+}
+
+module.exports = { validIdx, loadApp, reset, settle, setInput, snap, importJSON, runner, sleep };

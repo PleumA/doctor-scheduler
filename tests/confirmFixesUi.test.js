@@ -2,7 +2,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, runner, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const hasThai = (s) => /[฀-๿]/.test(s);
@@ -21,10 +26,12 @@ const hasThai = (s) => /[฀-๿]/.test(s);
         await w.generateSchedule();
         w.setViewMode('calendar'); // render the calendar buttons too
         w.setViewMode('table');
-        w.updateDoctorAssignment(5, 0, 3);
+        const di = validIdx(w, 5, 0, 3);
+        const picked = snap(w, 'globalResult.doctors')[di];
+        w.updateDoctorAssignment(5, 0, di);
         for (const id of ['btn-day-5-slot-0', 'btn-cal-day-5-slot-0']) {
             const l = d.getElementById(id).getAttribute('aria-label');
-            assert.ok(/Current: D\./.test(l), `${id}: ${l}`);
+            assert.ok(l.includes(`Current: ${picked}.`), `${id}: ${l}`);
         }
         w.resetSlotToAuto(5, 0);
         const auto = snap(w, 'globalResult.schedule[4].selectedDocs[0].name');
@@ -51,11 +58,11 @@ const hasThai = (s) => /[฀-๿]/.test(s);
         assert.strictEqual(undoBtn().querySelector('span').getAttribute('data-i18n'), 'undoBtn');
         assert.strictEqual(undoBtn().getAttribute('data-i18n-aria'), 'undoBtn');
         assert.ok(undoBtn().classList.contains('hidden'), 'hidden initially');
-        w.updateDoctorAssignment(5, 0, 3);
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, 3));
         assert.ok(!undoBtn().classList.contains('hidden'), 'shown after an edit');
         w.undoLastAction();
         assert.ok(undoBtn().classList.contains('hidden'), 'hidden after undoing the only edit');
-        w.updateDoctorAssignment(5, 0, 3);
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, 3));
         setInput(w, 'inputMonth', '2');
         await w.generateSchedule();
         assert.ok(
@@ -73,7 +80,10 @@ const hasThai = (s) => /[฀-๿]/.test(s);
         await w.generateSchedule();
         const row = () => snap(w, 'globalResult.schedule[4]');
         const r1 = row().selectedDocs[0].role;
+        // A role mismatch can only arrive unvalidated (e.g. an imported override): bypass the validator
+        w.isDragAndDropOperation = true;
         w.updateDoctorAssignment(5, 0, r1 === 'R1' ? 1 : 0); // a doctor of the other role
+        w.isDragAndDropOperation = false;
         const note = row().note;
         assert.ok(/Role Mismatch/.test(note), note);
         assert.ok(!hasThai(note), note);
@@ -87,7 +97,7 @@ const hasThai = (s) => /[฀-๿]/.test(s);
         const ev = { stopPropagation() {} };
         w.openCellDropdown(ev, 'tablecelldropdown-5-0');
         assert.ok(!dd().classList.contains('hidden'), 'opened');
-        w.updateDoctorAssignment(5, 0, 2);
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, 2));
         assert.ok(dd().classList.contains('hidden'), 'closed after selection');
         w.openCellDropdown(ev, 'tablecelldropdown-5-0');
         key('Escape');

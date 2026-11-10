@@ -1,6 +1,12 @@
 // Imported overrides and doctor-removal pruning apply only when a run commits.
 const assert = require('assert');
-const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, importJSON, runner } = require('./domHarness');
+
+// No rest window so a different doctor is a legal edit
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    w.document.getElementById('inputOffDutyPeriod').value = '0';
+};
 
 (async () => {
     const w = await loadApp();
@@ -9,7 +15,10 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     // Apply an edit the validator accepts at (day, slot 0); returns the doctor's name
     const edit = (day) => {
         const all = snap(w, 'globalResult.doctors');
-        const i = all.findIndex((n) => w.validateManualAssignment(w.eval('resultConfig()'), day, 0, n).ok);
+        const cur = snap(w, `globalResult.schedule[${day - 1}].selectedDocs[0].name`);
+        const i = all.findIndex(
+            (n) => n !== cur && w.validateManualAssignment(w.eval('resultConfig()'), day, 0, n).ok
+        );
         assert.ok(i >= 0, `no valid doctor for day ${day}`);
         w.updateDoctorAssignment(day, 0, i);
         return all[i];

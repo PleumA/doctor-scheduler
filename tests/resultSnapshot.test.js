@@ -1,7 +1,12 @@
 // The displayed result is a self-contained snapshot: a failed or still-running regenerate must not
 // pair the displayed rows with the new period, config or doctor list.
 const assert = require('assert');
-const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, runner, sleep, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 (async () => {
     const w = await loadApp();
@@ -43,15 +48,17 @@ const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./dom
     await test('t8 failed run after a month change keeps Jan overrides, undo and period', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 0, 3);
+        const di = validIdx(w, 5, 0, 3);
+        const picked = snap(w, 'globalResult.doctors')[di];
+        w.updateDoctorAssignment(5, 0, di);
         setInput(w, 'inputMonth', '2');
         await failQuota();
         assert.strictEqual(w.eval('overridesPeriod'), '1-2026');
         assert.ok(snap(w, 'manualOverrides')[5], 'Jan override kept');
         assert.ok(w.eval('undoStack.length') > 0, 'undo kept');
-        assert.strictEqual(names(5)[0], 'D');
+        assert.strictEqual(names(5)[0], picked);
         // a later Feb success must not inherit the Jan edits
-        w.updateDoctorAssignment(6, 0, 3);
+        w.updateDoctorAssignment(6, 0, validIdx(w, 6, 0, 3));
         setInput(w, 'inputSinglePoolQuota', '');
         await w.generateSchedule();
         assert.strictEqual(snap(w, 'globalResult.month'), 2);
@@ -134,7 +141,10 @@ const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./dom
         await toCustom();
         const idle = () => {
             w.toasts.length = 0;
+            // The off-day assignment is illegal by design (this tests the explanation): bypass validation
+            w.isDragAndDropOperation = true;
             w.updateDoctorAssignment(2, 0, 0);
+            w.isDragAndDropOperation = false;
             return [
                 w.toasts.some((t) => /requested off today/.test(t.msg)),
                 snap(w, 'globalResult.schedule[1].note'),
@@ -207,7 +217,7 @@ const { loadApp, reset, settle, setInput, snap, runner, sleep } = require('./dom
             w,
             'globalResult.schedule.flatMap(r=>r.isNoDuty?[]:r.selectedDocs.map(s=>s.name)).filter(n=>n!=="-"&&n!==""&&n!==SHORTAGE_MARKER)'
         );
-        w.updateDoctorAssignment(1, 0, 0); // recalculates counts
+        w.updateDoctorAssignment(1, 0, validIdx(w, 1, 0, 0)); // recalculates counts
         const grid = snap(
             w,
             'globalResult.schedule.flatMap(r=>r.isNoDuty?[]:r.selectedDocs.map(s=>s.name)).filter(n=>n!=="-"&&n!==""&&n!==SHORTAGE_MARKER)'

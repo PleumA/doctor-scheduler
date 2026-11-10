@@ -1,5 +1,10 @@
 const assert = require('assert');
-const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, importJSON, runner, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 (async () => {
     const w = await loadApp();
@@ -14,7 +19,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
         const strip = () => d.getElementById('fairnessStrip').textContent;
         const total = () => w.eval('globalResult.summary.reduce((a, s) => a + s.total, 0)');
         const before = { cell: cell(), strip: strip(), total: total() };
-        w.updateDoctorAssignment(5, 0, before.cell === 'A' ? 1 : 0);
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, before.cell === 'A' ? 1 : 0));
         assert.notStrictEqual(cell(), before.cell, 'edit did not apply');
         w.undoLastAction();
         assert.strictEqual(cell(), before.cell);
@@ -29,7 +34,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     await test('I1: manual edits are cleared, with a toast, when the month changes', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 1, 0);
+        w.updateDoctorAssignment(5, 1, validIdx(w, 5, 1, 0));
         assert.ok(w.eval('undoStack.length') > 0);
         setInput(w, 'inputMonth', '2');
         w.toasts.length = 0;
@@ -51,7 +56,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     await test('I1: a custom range change clears manual edits', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(2, 0, 1);
+        w.updateDoctorAssignment(2, 0, validIdx(w, 2, 0, 1));
         setInput(w, 'chkCustomDateRange', true);
         w.eval('isCustomDateRange = true');
         setInput(w, 'inputStartDate', '2026-03-01');
@@ -63,7 +68,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     await test('I1: an imported config brings its own overrides and drops old undo history', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(3, 0, 1); // leaves one undo entry
+        w.updateDoctorAssignment(3, 0, validIdx(w, 3, 0, 1)); // leaves one undo entry
         await importJSON(w, {
             doctors: ['A', 'B', 'C', 'D'],
             manualOverrides: { 5: { 0: 'D' } },
@@ -168,7 +173,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
         setInput(w, 'inputStartDate', '2026-03-01');
         setInput(w, 'inputEndDate', '2026-03-10');
         await w.generateSchedule();
-        w.updateDoctorAssignment(2, 0, other(2, 0));
+        w.updateDoctorAssignment(2, 0, validIdx(w, 2, 0, other(2, 0)));
         setInput(w, 'inputEndDate', '');
         await w.generateSchedule();
         assert.ok(Object.keys(snap(w, 'manualOverrides')).length > 0, 'overrides wiped');
@@ -178,8 +183,8 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     await test('undo: two edits, two undos return to the auto schedule', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 0, other(5, 0));
-        w.updateDoctorAssignment(8, 1, other(8, 1));
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, other(5, 0)));
+        w.updateDoctorAssignment(8, 1, validIdx(w, 8, 1, other(8, 1)));
         assert.notStrictEqual(names(), orig());
         w.undoLastAction();
         assert.notStrictEqual(names(), orig());
@@ -221,7 +226,7 @@ const { loadApp, reset, settle, setInput, snap, importJSON, runner } = require('
     await test('I1: a language toggle and a same-period regenerate keep manual edits', async () => {
         reset(w);
         await w.generateSchedule();
-        w.updateDoctorAssignment(5, 0, other(5, 0));
+        w.updateDoctorAssignment(5, 0, validIdx(w, 5, 0, other(5, 0)));
         const ov = snap(w, 'manualOverrides');
         w.toggleLanguage();
         await w.generateSchedule();

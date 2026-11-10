@@ -2,7 +2,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness');
+const { loadApp, reset: baseReset, settle, setInput, snap, runner, validIdx } = require('./domHarness');
+// No rest window: these tests make arbitrary edits, which the override validator would reject inside one
+const reset = (w, docs) => {
+    baseReset(w, docs);
+    setInput(w, 'inputOffDutyPeriod', '0');
+};
 
 (async () => {
     const w = await loadApp();
@@ -15,7 +20,7 @@ const { loadApp, reset, settle, setInput, snap, runner } = require('./domHarness
         reset(w);
         await w.generateSchedule();
         const auto = names(6);
-        w.updateDoctorAssignment(6, 0, auto[0] === 'C' ? 1 : 2);
+        w.updateDoctorAssignment(6, 0, validIdx(w, 6, 0, auto[0] === 'C' ? 1 : 2));
         const edited = names(6);
         assert.notDeepStrictEqual(edited, auto);
         setInput(w, 'inputSinglePoolQuota', 'A:1'); // a run would now fail
