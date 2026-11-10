@@ -1,0 +1,265 @@
+{
+  "date": "2026-11-10",
+  "skill": "literature-review",
+  "project": "doctor-scheduler",
+  "query": "algorithms for physician/nurse duty rostering for a small 4-6 doctor, 2-per-night, monthly roster with a >=14-night floor, fairness, manual overrides, browser JS",
+  "scope": {
+    "field": "operations research / healthcare scheduling",
+    "time_range": "1998-2026",
+    "languages": [
+      "English"
+    ],
+    "geography": "not constrained; Thai hospital context",
+    "access": "search only; no PDFs downloaded"
+  },
+  "shared_library": {
+    "available": false,
+    "reason": "no shared master library or bib-search.py found in this project or the user's Claude workspace"
+  },
+  "databases": {
+    "used": [
+      "OpenAlex",
+      "Crossref",
+      "PubMed E-utilities",
+      "arXiv"
+    ],
+    "attempted_failed": {
+      "Semantic Scholar": "HTTP 429 rate limit"
+    },
+    "not_queried": {
+      "CORE": "API key required",
+      "BASE": "API key required",
+      "IxTheo/Zenon/Propylaeum": "not applicable to operations research"
+    }
+  },
+  "queries": [
+    "title_and_abstract.search:\"nurse rostering\"",
+    "title_and_abstract.search:\"physician scheduling\"",
+    "title_and_abstract.search:\"nurse scheduling\" AND \"integer programming\"",
+    "title_and_abstract.search:\"nurse scheduling\" AND \"constraint programming\"",
+    "title_and_abstract.search:\"nurse scheduling\" AND \"CP-SAT\"",
+    "title_and_abstract.search:\"nurse rostering\" AND \"simulated annealing\"",
+    "title_and_abstract.search:\"nurse rostering\" AND \"tabu\"",
+    "title_and_abstract.search:\"nurse rostering\" AND \"genetic algorithm\"",
+    "title_and_abstract.search:\"nurse rostering\" AND \"column generation\"",
+    "title_and_abstract.search:\"nurse rostering\" AND fairness",
+    "title_and_abstract.search:rerostering",
+    "title_and_abstract.search:\"shift scheduling\" AND fairness",
+    "title_and_abstract.search:\"on-call\" AND scheduling AND physician",
+    "title_and_abstract.search:\"duty roster\"",
+    "title_and_abstract.search:\"nurse rostering\" AND \"case study\"",
+    "title_and_abstract.search:\"workload balancing\" AND nurse",
+    "title_and_abstract.search:\"personnel scheduling\" AND \"literature review\"",
+    "PubMed: nurse rostering[tiab]",
+    "PubMed: nurse scheduling[tiab] AND review[pt]",
+    "PubMed: e-rostering",
+    "PubMed: physician scheduling[tiab]",
+    "arXiv: id_list=2608.30419"
+  ],
+  "counts": {
+    "total": 30,
+    "A": 16,
+    "B": 11,
+    "C": 3,
+    "peer_reviewed_journal": 26,
+    "conference_or_proceedings": 3,
+    "preprint": 1
+  },
+  "candidates": [
+    {
+      "bibkey": "erhard2018",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "burke2004",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/df8f1e47-2dd9-4f30-844d-3ea6dd15a96d"
+    },
+    {
+      "bibkey": "cheang2003",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "ernst2004",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "vandenbergh2013",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/c911cbdc-9bc8-4047-9a8f-3fa6319f70ae"
+    },
+    {
+      "bibkey": "ngoo2022",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/09780256.pdf"
+    },
+    {
+      "bibkey": "min2026",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "ceschia2018",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "legrain2020",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "guo2022",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "bard2005",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "dowsland1998",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "ceschia2020",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "martin2013",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/a389eb9a-9113-4b6c-813e-bbc4ac4486d9"
+    },
+    {
+      "bibkey": "breugem2022",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "wickert2019",
+      "grade": "A",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/db38b715-c054-4c45-a582-9860fd159997"
+    },
+    {
+      "bibkey": "gradisar2022",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "stolletz2012",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "zhong2017",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "chia2026",
+      "grade": "B",
+      "type": "conference",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "jiang2026",
+      "grade": "B",
+      "type": "proceedings",
+      "oa_pdf": "https://www.mdpi.com/2673-4591/134/1/32/pdf?version=1775623158"
+    },
+    {
+      "bibkey": "patel2026",
+      "grade": "B",
+      "type": "preprint",
+      "oa_pdf": "https://arxiv.org/pdf/2608.30419"
+    },
+    {
+      "bibkey": "bodvarsdottir2020",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/4f681f12-240c-43ee-95d2-8ba3e7632471"
+    },
+    {
+      "bibkey": "mihaylov2016",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": "https://lirias.kuleuven.be/retrieve/be7e8f6f-ed57-4843-a238-d3597c58be81"
+    },
+    {
+      "bibkey": "oconnell2024",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "renggli2025",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": "https://formative.jmir.org/2025/1/e67747/PDF"
+    },
+    {
+      "bibkey": "gerlach2025",
+      "grade": "B",
+      "type": "journal",
+      "oa_pdf": "https://bmcnurs.biomedcentral.com/counter/pdf/10.1186/s12912-025-03808-0"
+    },
+    {
+      "bibkey": "booker2024",
+      "grade": "C",
+      "type": "journal",
+      "oa_pdf": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11057102/pdf/12912_2024_Article_1949.pdf"
+    },
+    {
+      "bibkey": "burke2010",
+      "grade": "C",
+      "type": "journal",
+      "oa_pdf": null
+    },
+    {
+      "bibkey": "uhde2020",
+      "grade": "C",
+      "type": "conference",
+      "oa_pdf": "https://dl.acm.org/doi/pdf/10.1145/3313831.3376656"
+    }
+  ],
+  "limitations": [
+    "No shared library was available, so no local deduplication was possible.",
+    "Semantic Scholar rate-limited; CORE/BASE require API keys.",
+    "CP-SAT evidence for small hospital rosters is thin: two recent conference/proceedings papers and one preprint; no mature peer-reviewed reference.",
+    "Most nurse-rostering instances are larger (20-60 staff) than a 4-6 doctor ward.",
+    "No German/French operations-research literature was searched.",
+    "No Thai/Southeast Asian hospital rostering literature was found in the English corpus.",
+    "The 14-night floor arithmetic is tight: 5 doctors need 70 slots, 6 need 84; the extra-doctor plan or a scaled floor is required."
+  ],
+  "outputs": {
+    "guide": "input/bibliography/literaturguide.md",
+    "bibtex": "output/bibtex/references.bib",
+    "audit_log": "input/bibliography/audit-log-2026-11-10.json",
+    "log": "knowledge/_meta/log.md"
+  }
+}
