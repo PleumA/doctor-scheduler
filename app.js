@@ -93,7 +93,10 @@ const parseKVNum = (str) => {
     return map;
 };
 const expandSlots = (roleSlots) =>
-    Object.entries(roleSlots).flatMap(([role, count]) => Array(count).fill(role));
+    Object.entries(roleSlots).flatMap(([role, count]) => {
+        const n = Math.floor(Number(count));
+        return Number.isFinite(n) && n > 0 ? Array(n).fill(role) : [];
+    });
 
 function getQuotaKey(doctor, config) {
     const isRoleBased = config ? config.roleBased : false;
@@ -1157,7 +1160,8 @@ function normalizeSlotKey(raw, config) {
     }
     return null;
 }
-const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+const dayDiff = (a, b) =>
+    Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
 
 // The last duties of the committed result, so the next contiguous period can honour rest and night->morning
 function buildCarryOver(result) {
@@ -1185,10 +1189,10 @@ function parseUIConfig() {
     const month = parseInt(document.getElementById('inputMonth').value);
     const specialHolidaysInput = document.getElementById('inputSpecialHols').value;
     const noDutyDaysInput = document.getElementById('inputNoDuty').value;
-    const defaultSlots = Math.min(
-        parseInt(document.getElementById('inputDefaultSlots').value) || 2,
-        50
-    );
+    const defaultSlotsRaw = parseInt(document.getElementById('inputDefaultSlots').value, 10);
+    const defaultSlots = Number.isFinite(defaultSlotsRaw)
+        ? Math.max(1, Math.min(10, defaultSlotsRaw))
+        : 2;
     const useSpecialRule = document.getElementById('chkUseSpecialRule').checked;
     const specialRuleDocsInput = document.getElementById('inputSpecialDocs').value;
     const lockConditionType = document.getElementById('lockConditionType')?.value || 'firstNDays';
@@ -1253,6 +1257,8 @@ function parseUIConfig() {
         else if (y < 100) y += 2000; // new Date(26, ...) would be 1926
         const date = new Date(y, m, d);
         if (isNaN(date.getTime())) return null;
+        // Reject rollovers such as 31/02/2026 -> 03/03/2026.
+        if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) return null;
         return date;
     };
 
@@ -3666,7 +3672,7 @@ function validateEdits(config, edits) {
                 return fail('rest', `${doc} worked ${duty.date}, inside the rest window`);
         }
 
-        if (holidaySet.has(day) && (holidaySet.has(day - 1) && sim(day - 1).includes(doc)))
+        if (holidaySet.has(day) && holidaySet.has(day - 1) && sim(day - 1).includes(doc))
             return fail('holiday', `${doc} worked the previous holiday`);
         if (holidaySet.has(day) && holidaySet.has(day + 1) && sim(day + 1).includes(doc))
             return fail('holiday', `${doc} works the next holiday`);
@@ -3680,10 +3686,23 @@ function validateEdits(config, edits) {
         if (isShift) {
             const carriedNight =
                 day === 1 &&
-                carried.some((x) => x.type === 'night' && dayDiff(x.date, config.periodStart) === 1);
-            if (slotIndex < morning && (carriedNight || sim(day - 1).slice(nightStart).includes(doc)))
+                carried.some(
+                    (x) => x.type === 'night' && dayDiff(x.date, config.periodStart) === 1
+                );
+            if (
+                slotIndex < morning &&
+                (carriedNight ||
+                    sim(day - 1)
+                        .slice(nightStart)
+                        .includes(doc))
+            )
                 return fail('nightToMorning', `${doc} worked last night`);
-            if (isNight && sim(day + 1).slice(0, morning).includes(doc))
+            if (
+                isNight &&
+                sim(day + 1)
+                    .slice(0, morning)
+                    .includes(doc)
+            )
                 return fail('nightToMorning', `${doc} has a morning shift tomorrow`);
         }
 
@@ -3691,7 +3710,8 @@ function validateEdits(config, edits) {
         if (config.quota && config.quota[key] !== undefined) {
             let total = 0;
             rows.forEach((_, i) => (total += sim(i + 1).filter((n) => n === doc).length));
-            if (total > config.quota[key]) return fail('quota', `${doc} would exceed quota ${config.quota[key]}`);
+            if (total > config.quota[key])
+                return fail('quota', `${doc} would exceed quota ${config.quota[key]}`);
         }
     }
 
@@ -3740,7 +3760,12 @@ window.applyPairedEdits = function (edits) {
     const resolved = edits.map((e) => ({
         day: e.day,
         slotIndex: e.slotIndex,
-        doc: e.docIndex === -1 ? SHORTAGE_MARKER : e.docIndex >= 0 ? globalResult.doctors[e.docIndex] : '-',
+        doc:
+            e.docIndex === -1
+                ? SHORTAGE_MARKER
+                : e.docIndex >= 0
+                  ? globalResult.doctors[e.docIndex]
+                  : '-',
     }));
     const v = validateEdits(resultConfig(), resolved);
     if (!v.ok) {
@@ -4200,7 +4225,8 @@ function renderRelaxations() {
     const el = document.getElementById('relaxationPanel');
     if (!el) return;
     const rel = (globalResult && globalResult.relaxations) || [];
-    el.classList.toggle('hidden', rel.length === 0);
+    if (rel.length === 0) el.classList.add('hidden');
+    else el.classList.remove('hidden');
     if (!rel.length) {
         el.innerHTML = '';
         return;
@@ -5810,7 +5836,11 @@ window.handlePersonDrop = function (e, targetDay, targetDocIndex, targetSlotInde
                     return;
             } else {
                 // Just reassign the source slot to the new doctor
-                if (!window.applyPairedEdits([{ day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex }]))
+                if (
+                    !window.applyPairedEdits([
+                        { day: srcDay, slotIndex: srcSlot, docIndex: targetDocIndex },
+                    ])
+                )
                     return;
             }
 
