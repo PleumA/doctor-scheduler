@@ -1156,7 +1156,11 @@ function buildCarryOver(result) {
             const name = s && s.name;
             if (!dutiesByDoctor[name]) return;
             const night = c.isShiftBased && idx >= c.morningSlots + c.afternoonSlots;
-            dutiesByDoctor[name].push({ date: isoLocal(dates[i]), type: night ? 'night' : 'duty' });
+            dutiesByDoctor[name].push({
+                date: isoLocal(dates[i]),
+                type: night ? 'night' : 'duty',
+                holiday: c.holidaySet.has(i + 1),
+            });
         });
     }
     return { dutiesByDoctor };
@@ -1683,17 +1687,20 @@ function parseUIConfig() {
         }
     }
 
-    // Carry over only from the day right before this period, for the same doctors
+    // Carry over from the live displayed result (it includes manual edits), for the same doctors.
+    // The same period again keeps its own carry-in; the day right after the result builds a fresh one.
     const prev = globalResult;
     const periodStart = scheduleDates[0] ? isoLocal(scheduleDates[0]) : null;
-    const carryOver =
+    let carryOver = null;
+    if (
         prev &&
-        prev.carryOver &&
         periodStart &&
-        dayDiff(isoLocal(prev.dates[prev.dates.length - 1]), periodStart) === 1 &&
         [...prev.doctors].sort().join('\u0000') === [...doctors].sort().join('\u0000')
-            ? prev.carryOver
-            : null;
+    ) {
+        const gap = dayDiff(isoLocal(prev.dates[prev.dates.length - 1]), periodStart);
+        if (gap === 1) carryOver = buildCarryOver(prev);
+        else if (periodStart === isoLocal(prev.dates[0])) carryOver = prev.config.carryOver || null;
+    }
 
     const configObj = {
         carryOver,
@@ -2305,6 +2312,15 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         };
 
         const isBlockedByNightToMorning = (doc, slotIdx) => {
+            if (isShiftBased && slotIdx < morningSlots && day === 1 && carryOver) {
+                // Night before the period started: same rule, read from the carried record
+                if (
+                    (carryOver.dutiesByDoctor[doc] || []).some(
+                        (d) => d.type === 'night' && dayDiff(d.date, periodStart) === 1
+                    )
+                )
+                    return true;
+            }
             if (isShiftBased && slotIdx < morningSlots && day > 1) {
                 const prevDayDocs = scheduleMap[day - 1] || [];
                 for (
@@ -2350,8 +2366,7 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     for (const duty of carryOver.dutiesByDoctor[doc] || []) {
                         const ago = dayDiff(duty.date, periodStart);
                         if (ago < offDutyPeriod) return false;
-                        if (ago === 1 && duty.type === 'night' && isShiftBased && slotIdx < morningSlots)
-                            return false;
+                        if (ago === 1 && isHoliday && duty.holiday) return false;
                     }
                 }
                 if (

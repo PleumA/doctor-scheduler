@@ -41,14 +41,47 @@ const { loadApp, reset, settle, setInput, snap } = require('./domHarness');
         assert.deepStrictEqual(feb1, [last === 'A' ? 'B' : 'A']);
     });
 
-    await test('non-contiguous period gets no carry-over', async () => {
-        await start();
+    await test('non-contiguous period gets no carry-over and day 1 is unconstrained', async () => {
+        const last = await start();
+        // April 1 is a Wednesday; forbid the other doctor so only the Jan 31 worker can take it
+        w.eval(`offData = [{ id: 1, date: '1', names: '${last === 'A' ? 'B' : 'A'}' }]`);
         await gen(4);
         assert.strictEqual(snap(w, 'globalResult.config.carryOver'), null);
+        assert.deepStrictEqual(names(rows()[0]), [last]);
+    });
+
+    await test('regenerating the same period keeps its carry-in', async () => {
+        const last = await start();
+        await gen(2);
+        await gen(2);
+        assert.ok(snap(w, 'globalResult.config.carryOver'), 'carry-in lost');
+        assert.ok(!names(rows()[0]).includes(last));
+    });
+
+    await test('manual edit of the last day is what carries over', async () => {
+        const last = await start();
+        const other = last === 'A' ? 'B' : 'A';
+        w.eval(`globalResult.schedule[30].selectedDocs[0].name = '${other}'`);
+        await gen(2);
+        const co = snap(w, 'globalResult.config.carryOver');
+        assert.deepStrictEqual(co.dutiesByDoctor[other].pop().date, '2026-01-31');
+        assert.ok(!names(rows()[0]).includes(other));
+    });
+
+    await test('holiday spacing: Jan 31 and Feb 1 are weekend days, no gap needed otherwise', async () => {
+        reset(w, ['A', 'B']);
+        setInput(w, 'inputYear', '2026');
+        setInput(w, 'inputDefaultSlots', '1');
+        setInput(w, 'inputOffDutyPeriod', '0');
+        await gen(1);
+        const last = names(rows()[rows().length - 1])[0];
+        assert.ok(snap(w, 'globalResult.carryOver').dutiesByDoctor[last].pop().holiday);
+        await gen(2);
+        assert.ok(!names(rows()[0]).includes(last));
     });
 
     await test('night then next-day morning is blocked across the boundary', async () => {
-        reset(w, ['A', 'B']);
+        reset(w, ['A', 'B', 'C']);
         setInput(w, 'inputYear', '2026');
         setInput(w, 'chkShiftBased', true);
         setInput(w, 'inputMorningSlots', '1');
@@ -58,7 +91,14 @@ const { loadApp, reset, settle, setInput, snap } = require('./domHarness');
         await gen(1);
         const jan = rows();
         const night = jan[jan.length - 1].selectedDocs[1].name;
+        const offDoc = ['A', 'B', 'C'].find((d) => d !== night);
+        w.eval(`offData = [{ id: 1, date: '1', names: '${offDoc}' }]`);
         await gen(2);
+        const co = snap(w, 'globalResult.config.carryOver');
+        assert.deepStrictEqual(
+            co.dutiesByDoctor[night].filter((d) => d.date === '2026-01-31').map((d) => d.type),
+            ['night']
+        );
         assert.notStrictEqual(rows()[0].selectedDocs[0].name, night);
     });
 
