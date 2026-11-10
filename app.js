@@ -2205,6 +2205,33 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
         });
     }
 
+    // Remaining available days per doctor, suffix-counted from each day (off requests only).
+    // The quota-density comparator would otherwise rescan every remaining day per comparison,
+    // which is quadratic in the range length. Built once per candidate, read O(1) per day.
+    const remainingAvailableByDoctor = {};
+    if (hasQuotas) {
+        const offRequestsByDay = [];
+        for (let d = 1; d <= numDays; d++) {
+            let dayKey = d;
+            if (isCustomDateRange) {
+                const dateObj = scheduleDates[d - 1];
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const yyyy = dateObj.getFullYear();
+                dayKey = `${dd}/${mm}/${yyyy}`;
+            }
+            offRequestsByDay[d] = offMap[dayKey] || null;
+        }
+        doctors.forEach((doc) => {
+            const suffix = new Array(numDays + 2).fill(0);
+            for (let d = numDays; d >= 1; d--) {
+                const offSet = offRequestsByDay[d];
+                suffix[d] = suffix[d + 1] + (offSet && offSet.has(doc) ? 0 : 1);
+            }
+            remainingAvailableByDoctor[doc] = suffix;
+        });
+    }
+
     // Sort doctors by workload counters, with random perturbation for exploring alternatives
     const sortDoctors = (docsList, isHol, currentDay) => {
         const noise = {};
@@ -2242,26 +2269,8 @@ function generateSingleScheduleCandidate(randomness = 0, config) {
                     const diffQuotaA = quotaA - tCounts[a];
                     const diffQuotaB = quotaB - tCounts[b];
 
-                    const getRemainingAvailableDays = (doc) => {
-                        let count = 0;
-                        for (let d = currentDay; d <= numDays; d++) {
-                            let dayKey = d;
-                            if (isCustomDateRange) {
-                                const dateObj = scheduleDates[d - 1];
-                                const dd = String(dateObj.getDate()).padStart(2, '0');
-                                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                                const yyyy = dateObj.getFullYear();
-                                dayKey = `${dd}/${mm}/${yyyy}`;
-                            }
-                            const offSet = offMap[dayKey] || new Set();
-                            if (!offSet.has(doc)) {
-                                count++;
-                            }
-                        }
-                        return count;
-                    };
-                    const availA = getRemainingAvailableDays(a);
-                    const availB = getRemainingAvailableDays(b);
+                    const availA = remainingAvailableByDoctor[a][currentDay];
+                    const availB = remainingAvailableByDoctor[b][currentDay];
                     const densityA = availA > 0 ? diffQuotaA / availA : 0;
                     const densityB = availB > 0 ? diffQuotaB / availB : 0;
 
