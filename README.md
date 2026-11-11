@@ -148,8 +148,3 @@ Built for high reliability, clean execution, and security:
 | `CONTRIBUTING.md` | Contribution guidelines |
 | `CHANGELOG.md` | Version history (Keep a Changelog format) |
 | `logic_report.md` | Deep-dive technical reference on the solver |
-| `docs/superpowers/specs/2026-11-10-scheduler-logic-design.md` | Solver design spec (night floor, relaxations, carry-over) |
-| `docs/superpowers/plans/2026-11-10-scheduler-logic-remaining.md` | Implementation plan for the remaining solver work |
-| `input/bibliography/literaturguide.md` | Literature guide (30 sources) |
-| `output/bibtex/references.bib` | BibTeX for the literature guide |
-| `input/`, `output/`, `knowledge/` | Research workspace folders (bibliography, BibTeX output, wiki metadata); `input/library/` is git-ignored |
