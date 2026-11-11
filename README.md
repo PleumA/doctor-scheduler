@@ -79,7 +79,7 @@
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/PleumA/PleumA.github.io
+git clone https://github.com/PleumA/doctor-scheduler
 cd PleumA.github.io
 npm install          # install all dependencies
 npm run build        # compile Tailwind CSS → dist/output.css
